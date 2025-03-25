@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Car, Tool, Bell, BarChart3, MessageSquare, ArrowRight, Check } from "lucide-react";
+import { Car, Bell, BarChart3, MessageSquare, ArrowRight, Check, Wrench } from "lucide-react";
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
 
@@ -17,7 +16,7 @@ const Index = () => {
     {
       title: "Maintenance Tracking",
       description: "Keep records of all maintenance and repairs in one organized place.",
-      icon: Tool,
+      icon: Wrench,
       color: "text-neon-blue"
     },
     {

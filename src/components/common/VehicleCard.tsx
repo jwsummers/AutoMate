@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Car, Calendar, Tool, AlertTriangle, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Car, Calendar, MoreVertical, Edit, Trash2, AlertTriangle, Wrench } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
@@ -120,7 +120,7 @@ const VehicleCard = ({
         
         <div className="border-t border-white/5 pt-4 flex justify-between items-center">
           <div className="flex items-center gap-2 text-sm">
-            <Tool className="w-4 h-4 text-neon-blue" />
+            <Wrench className="w-4 h-4 text-neon-blue" />
             <span>Next service: <span className="text-foreground/70">{nextService}</span></span>
           </div>
           <Button variant="outline" size="sm" className="border-white/10 hover:bg-white/5">
