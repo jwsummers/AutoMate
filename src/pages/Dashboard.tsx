@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +18,6 @@ import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
 import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
 import { toast } from 'sonner';
 
-// Mock data for the demo mode
 const mockVehicles = [
   {
     id: "v1",
@@ -121,15 +119,20 @@ const Dashboard = () => {
     deleteMaintenanceRecord
   } = useMaintenance();
   
-  // Determine if we should use mock data (demo mode)
   useEffect(() => {
     const demoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
     setIsDemoMode(demoMode);
   }, []);
   
-  // Display data based on mode
   const displayVehicles = isDemoMode ? mockVehicles : vehicles;
-  const displayMaintenance = isDemoMode ? mockMaintenanceTasks : maintenanceRecords;
+  
+  const normalizedMockTasks = mockMaintenanceTasks.map(task => ({
+    ...task,
+    type: task.title,
+    vehicle_id: task.vehicleId
+  }));
+  
+  const displayMaintenance = isDemoMode ? normalizedMockTasks : maintenanceRecords;
   
   const upcomingMaintenance = displayMaintenance.filter(task => 
     task.status === 'upcoming' || task.status === 'overdue'
@@ -184,7 +187,6 @@ const Dashboard = () => {
   
   const handleViewMaintenance = (id: string) => {
     console.log("View maintenance:", id);
-    // In a real app, this would navigate to a detailed view
   };
   
   const handleCompleteMaintenance = (id: string) => {
@@ -331,7 +333,7 @@ const Dashboard = () => {
                               image={vehicle.image}
                               mileage={vehicle.mileage || 0}
                               nextService={upcomingMaintenance.find(m => m.vehicle_id === vehicle.id)?.description || "No upcoming services"}
-                              healthScore={Math.floor(Math.random() * 30) + 70} // Placeholder health score
+                              healthScore={Math.floor(Math.random() * 30) + 70}
                               alerts={overdueCount}
                               onDelete={handleDeleteVehicle}
                               onEdit={handleEditVehicle}
@@ -454,7 +456,6 @@ const Dashboard = () => {
                           ) : (
                             <div className="space-y-4">
                               {displayVehicles.map((vehicle) => {
-                                // Placeholder health score calculation
                                 const healthScore = Math.floor(Math.random() * 30) + 70;
                                 
                                 return (
@@ -528,7 +529,7 @@ const Dashboard = () => {
                             image={vehicle.image}
                             mileage={vehicle.mileage || 0}
                             nextService={upcomingMaintenance.find(m => m.vehicle_id === vehicle.id)?.description || "No upcoming services"}
-                            healthScore={Math.floor(Math.random() * 30) + 70} // Placeholder health score
+                            healthScore={Math.floor(Math.random() * 30) + 70}
                             alerts={overdueCount}
                             onDelete={handleDeleteVehicle}
                             onEdit={handleEditVehicle}
@@ -632,7 +633,6 @@ const Dashboard = () => {
       
       <Footer />
       
-      {/* Add Vehicle Dialog */}
       <Dialog open={isAddVehicleOpen} onOpenChange={setIsAddVehicleOpen}>
         <DialogContent className="sm:max-w-[525px] bg-dark-card border-white/10 text-foreground">
           <DialogHeader>
@@ -648,7 +648,9 @@ const Dashboard = () => {
                 const success = await addVehicle(data);
                 if (success) {
                   setIsAddVehicleOpen(false);
+                  return success;
                 }
+                return null;
               }}
               onCancel={() => setIsAddVehicleOpen(false)}
             />
@@ -656,7 +658,6 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Edit Vehicle Dialog */}
       <Dialog open={isEditVehicleOpen} onOpenChange={setIsEditVehicleOpen}>
         <DialogContent className="sm:max-w-[525px] bg-dark-card border-white/10 text-foreground">
           <DialogHeader>
@@ -675,7 +676,9 @@ const Dashboard = () => {
                   if (success) {
                     setIsEditVehicleOpen(false);
                     setSelectedVehicle(null);
+                    return success;
                   }
+                  return false;
                 }}
                 onCancel={() => {
                   setIsEditVehicleOpen(false);
@@ -687,7 +690,6 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Add Maintenance Dialog */}
       <Dialog open={isAddMaintenanceOpen} onOpenChange={setIsAddMaintenanceOpen}>
         <DialogContent className="sm:max-w-[525px] bg-dark-card border-white/10 text-foreground">
           <DialogHeader>
@@ -704,7 +706,9 @@ const Dashboard = () => {
                 const success = await addMaintenanceRecord(data);
                 if (success) {
                   setIsAddMaintenanceOpen(false);
+                  return true;
                 }
+                return false;
               }}
               onCancel={() => setIsAddMaintenanceOpen(false)}
             />

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,9 +69,9 @@ const AddVehicleForm = ({ onSubmit, onCancel }: AddVehicleFormProps) => {
         
         // If the image was uploaded successfully, update the vehicle
         if (imageUrl) {
+          // Using updateVehicle instead of onSubmit to avoid type issues with id
           await onSubmit({
             ...formData,
-            id: newVehicle.id, // Pass the ID back
             image: imageUrl
           });
         }

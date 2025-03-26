@@ -16,6 +16,7 @@ export interface MaintenanceRecord {
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
+  user_id?: string;
 }
 
 export type MaintenanceStatus = 'completed' | 'upcoming' | 'overdue';
@@ -81,9 +82,15 @@ export function useMaintenance() {
     try {
       setLoading(true);
       
+      // Make sure user_id is set
+      const recordWithUserId = {
+        ...newRecord,
+        user_id: user.id
+      };
+      
       const { data, error } = await supabase
         .from('maintenance_records')
-        .insert([{ ...newRecord }])
+        .insert([recordWithUserId])
         .select()
         .single();
       

@@ -18,6 +18,7 @@ export interface Vehicle {
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
+  user_id?: string;
 }
 
 export function useVehicles() {
@@ -56,9 +57,15 @@ export function useVehicles() {
     try {
       setLoading(true);
       
+      // Make sure user_id is set
+      const vehicleWithUserId = {
+        ...newVehicle,
+        user_id: user.id
+      };
+      
       const { data, error } = await supabase
         .from('vehicles')
-        .insert([{ ...newVehicle }])
+        .insert([vehicleWithUserId])
         .select()
         .single();
       
