@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,15 @@ import Footer from '@/components/Layout/Footer';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import VehicleCard from '@/components/common/VehicleCard';
 import MaintenanceItem from '@/components/common/MaintenanceItem';
+import { useAuth } from '@/contexts/AuthContext';
+import { useVehicles, Vehicle } from '@/hooks/useVehicles';
+import { useMaintenance, MaintenanceWithStatus } from '@/hooks/useMaintenance';
+import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
+import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
+import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
+import { toast } from 'sonner';
 
-// Mock data for demonstration
+// Mock data for the demo mode
 const mockVehicles = [
   {
     id: "v1",
@@ -92,19 +99,87 @@ const mockMaintenanceTasks = [
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
+  const [isAddMaintenanceOpen, setIsAddMaintenanceOpen] = useState(false);
+  const [isEditVehicleOpen, setIsEditVehicleOpen] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  
+  const { user } = useAuth();
+  const { 
+    vehicles, 
+    loading: vehiclesLoading, 
+    addVehicle, 
+    updateVehicle, 
+    deleteVehicle 
+  } = useVehicles();
+  
+  const { 
+    maintenanceRecords, 
+    loading: maintenanceLoading,
+    addMaintenanceRecord,
+    markMaintenanceAsCompleted,
+    deleteMaintenanceRecord
+  } = useMaintenance();
+  
+  // Determine if we should use mock data (demo mode)
+  useEffect(() => {
+    const demoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
+    setIsDemoMode(demoMode);
+  }, []);
+  
+  // Display data based on mode
+  const displayVehicles = isDemoMode ? mockVehicles : vehicles;
+  const displayMaintenance = isDemoMode ? mockMaintenanceTasks : maintenanceRecords;
+  
+  const upcomingMaintenance = displayMaintenance.filter(task => 
+    task.status === 'upcoming' || task.status === 'overdue'
+  );
+  
+  const completedMaintenance = displayMaintenance.filter(task => 
+    task.status === 'completed'
+  );
+  
+  const overdueCount = displayMaintenance.filter(task => task.status === 'overdue').length;
+  const upcomingCount = displayMaintenance.filter(task => task.status === 'upcoming').length;
   
   const handleAddVehicle = () => {
+    if (isDemoMode) {
+      toast.info('Feature disabled in demo mode');
+      return;
+    }
     setIsAddVehicleOpen(true);
   };
   
+  const handleAddMaintenance = () => {
+    if (isDemoMode) {
+      toast.info('Feature disabled in demo mode');
+      return;
+    }
+    setIsAddMaintenanceOpen(true);
+  };
+  
   const handleDeleteVehicle = (id: string) => {
-    console.log("Delete vehicle:", id);
-    // In a real app, this would call an API to delete the vehicle
+    if (isDemoMode) {
+      toast.info('Feature disabled in demo mode');
+      return;
+    }
+    
+    if (window.confirm('Are you sure you want to delete this vehicle? This will also delete all maintenance records associated with this vehicle.')) {
+      deleteVehicle(id);
+    }
   };
   
   const handleEditVehicle = (id: string) => {
-    console.log("Edit vehicle:", id);
-    // In a real app, this would open an edit modal
+    if (isDemoMode) {
+      toast.info('Feature disabled in demo mode');
+      return;
+    }
+    
+    const vehicle = vehicles.find(v => v.id === id);
+    if (vehicle) {
+      setSelectedVehicle(vehicle);
+      setIsEditVehicleOpen(true);
+    }
   };
   
   const handleViewMaintenance = (id: string) => {
@@ -113,9 +188,15 @@ const Dashboard = () => {
   };
   
   const handleCompleteMaintenance = (id: string) => {
-    console.log("Complete maintenance:", id);
-    // In a real app, this would update the maintenance record
+    if (isDemoMode) {
+      toast.info('Feature disabled in demo mode');
+      return;
+    }
+    
+    markMaintenanceAsCompleted(id);
   };
+  
+  const isLoading = vehiclesLoading || maintenanceLoading;
   
   return (
     <div className="min-h-screen flex flex-col bg-dark-bg">
@@ -125,305 +206,427 @@ const Dashboard = () => {
         <div className="container mx-auto px-4">
           <DashboardHeader onAddVehicle={handleAddVehicle} />
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-dark-card border border-white/10 p-1 mb-8 overflow-x-auto">
-              <TabsTrigger value="overview" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                <span>Overview</span>
-              </TabsTrigger>
-              <TabsTrigger value="vehicles" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
-                <Car className="h-4 w-4 mr-2" />
-                <span>Vehicles</span>
-              </TabsTrigger>
-              <TabsTrigger value="maintenance" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
-                <Wrench className="h-4 w-4 mr-2" />
-                <span>Maintenance</span>
-              </TabsTrigger>
-              <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                <span>AI Assistant</span>
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="overview" className="mt-0 animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <Card className="bg-dark-card border-white/10">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-foreground/70 text-sm mb-1">Total Vehicles</p>
-                        <h3 className="text-3xl font-bold">{mockVehicles.length}</h3>
-                      </div>
-                      <div className="bg-neon-blue/10 p-2 rounded-lg">
-                        <Car className="h-5 w-5 text-neon-blue" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-dark-card border-white/10">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-foreground/70 text-sm mb-1">Upcoming Services</p>
-                        <h3 className="text-3xl font-bold">2</h3>
-                      </div>
-                      <div className="bg-neon-purple/10 p-2 rounded-lg">
-                        <Clock className="h-5 w-5 text-neon-purple" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-dark-card border-white/10">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-foreground/70 text-sm mb-1">Active Alerts</p>
-                        <h3 className="text-3xl font-bold">1</h3>
-                      </div>
-                      <div className="bg-red-500/10 p-2 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          {isDemoMode && (
+            <div className="mb-6 p-4 bg-yellow-500/10 text-yellow-400 rounded-lg">
+              <p className="text-sm font-medium">
+                You are viewing the demo mode with sample data. 
+                <Link to="/dashboard" className="ml-2 underline">
+                  Click here
+                </Link> to view your actual data.
+              </p>
+            </div>
+          )}
+          
+          {isLoading && !isDemoMode ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
               </div>
+              <span>Loading your dashboard...</span>
+            </div>
+          ) : (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-dark-card border border-white/10 p-1 mb-8 overflow-x-auto">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  <span>Overview</span>
+                </TabsTrigger>
+                <TabsTrigger value="vehicles" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
+                  <Car className="h-4 w-4 mr-2" />
+                  <span>Vehicles</span>
+                </TabsTrigger>
+                <TabsTrigger value="maintenance" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
+                  <Wrench className="h-4 w-4 mr-2" />
+                  <span>Maintenance</span>
+                </TabsTrigger>
+                <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  <span>AI Assistant</span>
+                </TabsTrigger>
+              </TabsList>
               
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold">Your Vehicles</h2>
-                      <Button variant="ghost" size="sm" className="gap-1 hover:bg-white/5">
-                        <span>View All</span>
-                        <SlashSquare className="h-4 w-4" />
-                      </Button>
+              <TabsContent value="overview" className="mt-0 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-foreground/70 text-sm mb-1">Total Vehicles</p>
+                          <h3 className="text-3xl font-bold">{displayVehicles.length}</h3>
+                        </div>
+                        <div className="bg-neon-blue/10 p-2 rounded-lg">
+                          <Car className="h-5 w-5 text-neon-blue" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-foreground/70 text-sm mb-1">Upcoming Services</p>
+                          <h3 className="text-3xl font-bold">{upcomingCount}</h3>
+                        </div>
+                        <div className="bg-neon-purple/10 p-2 rounded-lg">
+                          <Clock className="h-5 w-5 text-neon-purple" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-foreground/70 text-sm mb-1">Active Alerts</p>
+                          <h3 className="text-3xl font-bold">{overdueCount}</h3>
+                        </div>
+                        <div className="bg-red-500/10 p-2 rounded-lg">
+                          <AlertTriangle className="h-5 w-5 text-red-500" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-semibold">Your Vehicles</h2>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="gap-1 hover:bg-white/5"
+                          onClick={() => setActiveTab("vehicles")}
+                        >
+                          <span>View All</span>
+                          <SlashSquare className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {displayVehicles.length === 0 ? (
+                          <p className="text-foreground/70 col-span-2 text-center py-10">
+                            You don't have any vehicles yet. 
+                            <Button 
+                              variant="link" 
+                              className="text-neon-blue p-0 h-auto" 
+                              onClick={handleAddVehicle}
+                            >
+                              Add your first vehicle
+                            </Button>
+                          </p>
+                        ) : (
+                          displayVehicles.slice(0, 2).map((vehicle) => (
+                            <VehicleCard 
+                              key={vehicle.id}
+                              id={vehicle.id}
+                              make={vehicle.make}
+                              model={vehicle.model}
+                              year={vehicle.year}
+                              image={vehicle.image}
+                              mileage={vehicle.mileage || 0}
+                              nextService={upcomingMaintenance.find(m => m.vehicle_id === vehicle.id)?.description || "No upcoming services"}
+                              healthScore={Math.floor(Math.random() * 30) + 70} // Placeholder health score
+                              alerts={overdueCount}
+                              onDelete={handleDeleteVehicle}
+                              onEdit={handleEditVehicle}
+                            />
+                          ))
+                        )}
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {mockVehicles.slice(0, 2).map((vehicle) => (
-                        <VehicleCard 
-                          key={vehicle.id}
-                          {...vehicle}
-                          onDelete={handleDeleteVehicle}
-                          onEdit={handleEditVehicle}
-                        />
-                      ))}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-semibold">Maintenance Summary</h2>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="gap-1 hover:bg-white/5"
+                          onClick={() => setActiveTab("maintenance")}
+                        >
+                          <span>View History</span>
+                          <SlashSquare className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <Card className="bg-dark-card border-white/10">
+                        <CardContent className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="p-4 rounded-lg bg-white/5">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-green-500/10 p-2 rounded-lg">
+                                  <Check className="h-5 w-5 text-green-500" />
+                                </div>
+                                <div>
+                                  <p className="text-foreground/70 text-sm">Completed</p>
+                                  <h3 className="text-2xl font-bold">{completedMaintenance.length}</h3>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="p-4 rounded-lg bg-white/5">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-neon-blue/10 p-2 rounded-lg">
+                                  <Clock className="h-5 w-5 text-neon-blue" />
+                                </div>
+                                <div>
+                                  <p className="text-foreground/70 text-sm">Upcoming</p>
+                                  <h3 className="text-2xl font-bold">{upcomingCount}</h3>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="p-4 rounded-lg bg-white/5">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-red-500/10 p-2 rounded-lg">
+                                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                                </div>
+                                <div>
+                                  <p className="text-foreground/70 text-sm">Overdue</p>
+                                  <h3 className="text-2xl font-bold">{overdueCount}</h3>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </div>
                   </div>
                   
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold">Maintenance Summary</h2>
-                      <Button variant="ghost" size="sm" className="gap-1 hover:bg-white/5">
-                        <span>View History</span>
-                        <SlashSquare className="h-4 w-4" />
+                      <h2 className="text-xl font-semibold">Upcoming Services</h2>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-1 border-white/10 hover:bg-white/5"
+                        onClick={handleAddMaintenance}
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                        <span>Add</span>
                       </Button>
                     </div>
                     
-                    <Card className="bg-dark-card border-white/10">
-                      <CardContent className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="p-4 rounded-lg bg-white/5">
-                            <div className="flex items-start gap-3">
-                              <div className="bg-green-500/10 p-2 rounded-lg">
-                                <Check className="h-5 w-5 text-green-500" />
-                              </div>
-                              <div>
-                                <p className="text-foreground/70 text-sm">Completed</p>
-                                <h3 className="text-2xl font-bold">5</h3>
-                              </div>
+                    <div className="space-y-4">
+                      {upcomingMaintenance.length === 0 ? (
+                        <p className="text-foreground/70 text-center py-10">
+                          No upcoming maintenance scheduled.
+                        </p>
+                      ) : (
+                        upcomingMaintenance.slice(0, 3).map((task) => (
+                          <MaintenanceItem
+                            key={task.id}
+                            id={task.id}
+                            title={task.type}
+                            description={task.description}
+                            date={task.date}
+                            status={task.status}
+                            mileage={task.mileage || undefined}
+                            cost={task.cost || undefined}
+                            onView={handleViewMaintenance}
+                            onComplete={handleCompleteMaintenance}
+                          />
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-semibold">Vehicle Health</h2>
+                        <Button variant="ghost" size="sm" className="gap-1 hover:bg-white/5">
+                          <BarChart2 className="h-4 w-4" />
+                          <span>Details</span>
+                        </Button>
+                      </div>
+                      
+                      <Card className="bg-dark-card border-white/10">
+                        <CardContent className="p-4">
+                          {displayVehicles.length === 0 ? (
+                            <p className="text-foreground/70 text-center py-6">
+                              Add vehicles to see health status.
+                            </p>
+                          ) : (
+                            <div className="space-y-4">
+                              {displayVehicles.map((vehicle) => {
+                                // Placeholder health score calculation
+                                const healthScore = Math.floor(Math.random() * 30) + 70;
+                                
+                                return (
+                                  <div key={vehicle.id} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
+                                        <Car className="w-5 h-5 text-foreground/70" />
+                                      </div>
+                                      <div>
+                                        <p className="font-medium">{vehicle.make} {vehicle.model}</p>
+                                        <p className="text-sm text-foreground/70">{vehicle.year}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-3 h-3 rounded-full ${
+                                        healthScore >= 80 ? 'bg-green-500' : 
+                                        healthScore >= 50 ? 'bg-yellow-500' : 
+                                        'bg-red-500'
+                                      }`}></div>
+                                      <span className="font-medium">{healthScore}%</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          </div>
-                          
-                          <div className="p-4 rounded-lg bg-white/5">
-                            <div className="flex items-start gap-3">
-                              <div className="bg-neon-blue/10 p-2 rounded-lg">
-                                <Clock className="h-5 w-5 text-neon-blue" />
-                              </div>
-                              <div>
-                                <p className="text-foreground/70 text-sm">Upcoming</p>
-                                <h3 className="text-2xl font-bold">2</h3>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="p-4 rounded-lg bg-white/5">
-                            <div className="flex items-start gap-3">
-                              <div className="bg-red-500/10 p-2 rounded-lg">
-                                <AlertTriangle className="h-5 w-5 text-red-500" />
-                              </div>
-                              <div>
-                                <p className="text-foreground/70 text-sm">Overdue</p>
-                                <h3 className="text-2xl font-bold">1</h3>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </div>
-                
-                <div>
+              </TabsContent>
+              
+              <TabsContent value="vehicles" className="mt-0 animate-fade-in">
+                <div className="mb-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold">Upcoming Services</h2>
+                    <h2 className="text-xl font-semibold">Your Vehicles</h2>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="gap-1 border-white/10 hover:bg-white/5"
+                      onClick={handleAddVehicle}
                     >
-                      <CalendarPlus className="h-4 w-4" />
-                      <span>Add</span>
+                      <Car className="h-4 w-4" />
+                      <span>Add Vehicle</span>
                     </Button>
                   </div>
                   
-                  <div className="space-y-4">
-                    {mockMaintenanceTasks
-                      .filter(task => task.status !== 'completed')
-                      .map((task) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {displayVehicles.length === 0 && !isDemoMode ? (
+                      <div className="col-span-full text-center py-12">
+                        <Car className="w-16 h-16 text-foreground/20 mx-auto mb-4" />
+                        <h3 className="text-xl font-medium mb-2">No Vehicles Found</h3>
+                        <p className="text-foreground/70 mb-6">You haven't added any vehicles yet.</p>
+                        <Button 
+                          className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
+                          onClick={handleAddVehicle}
+                        >
+                          Add Your First Vehicle
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        {displayVehicles.map((vehicle) => (
+                          <VehicleCard 
+                            key={vehicle.id}
+                            id={vehicle.id}
+                            make={vehicle.make}
+                            model={vehicle.model}
+                            year={vehicle.year}
+                            image={vehicle.image}
+                            mileage={vehicle.mileage || 0}
+                            nextService={upcomingMaintenance.find(m => m.vehicle_id === vehicle.id)?.description || "No upcoming services"}
+                            healthScore={Math.floor(Math.random() * 30) + 70} // Placeholder health score
+                            alerts={overdueCount}
+                            onDelete={handleDeleteVehicle}
+                            onEdit={handleEditVehicle}
+                          />
+                        ))}
+                        
+                        {!isDemoMode && (
+                          <div 
+                            className="glass-card rounded-xl flex flex-col items-center justify-center p-8 border border-dashed border-white/20 hover:border-neon-blue/50 transition-colors cursor-pointer min-h-[300px]"
+                            onClick={handleAddVehicle}
+                          >
+                            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                              <Plus className="w-8 h-8 text-neon-blue" />
+                            </div>
+                            <h3 className="text-lg font-medium mb-2">Add New Vehicle</h3>
+                            <p className="text-foreground/70 text-center">Track maintenance and get personalized service reminders</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="maintenance" className="mt-0 animate-fade-in">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">Maintenance Schedule</h2>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-1 border-white/10 hover:bg-white/5"
+                      onClick={handleAddMaintenance}
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      <span>Add Service</span>
+                    </Button>
+                  </div>
+                  
+                  {displayMaintenance.length === 0 && !isDemoMode ? (
+                    <div className="text-center py-12">
+                      <Wrench className="w-16 h-16 text-foreground/20 mx-auto mb-4" />
+                      <h3 className="text-xl font-medium mb-2">No Maintenance Records</h3>
+                      <p className="text-foreground/70 mb-6">You haven't added any maintenance records yet.</p>
+                      <Button 
+                        className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
+                        onClick={handleAddMaintenance}
+                      >
+                        Schedule Your First Maintenance
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {displayMaintenance.map((task) => (
                         <MaintenanceItem
                           key={task.id}
-                          {...task}
+                          id={task.id}
+                          title={task.type}
+                          description={task.description}
+                          date={task.date}
+                          status={task.status}
+                          mileage={task.mileage || undefined}
+                          cost={task.cost || undefined}
                           onView={handleViewMaintenance}
                           onComplete={handleCompleteMaintenance}
                         />
                       ))}
-                  </div>
-                  
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold">Vehicle Health</h2>
-                      <Button variant="ghost" size="sm" className="gap-1 hover:bg-white/5">
-                        <BarChart2 className="h-4 w-4" />
-                        <span>Details</span>
-                      </Button>
                     </div>
-                    
-                    <Card className="bg-dark-card border-white/10">
-                      <CardContent className="p-4">
-                        <div className="space-y-4">
-                          {mockVehicles.map((vehicle) => (
-                            <div key={vehicle.id} className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
-                                  <Car className="w-5 h-5 text-foreground/70" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{vehicle.make} {vehicle.model}</p>
-                                  <p className="text-sm text-foreground/70">{vehicle.year}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  vehicle.healthScore >= 80 ? 'bg-green-500' : 
-                                  vehicle.healthScore >= 50 ? 'bg-yellow-500' : 
-                                  'bg-red-500'
-                                }`}></div>
-                                <span className="font-medium">{vehicle.healthScore}%</span>
-                              </div>
-                            </div>
-                          ))}
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="ai-assistant" className="mt-0 animate-fade-in">
+                <div className="mb-6">
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="p-6">
+                      <div className="text-center max-w-2xl mx-auto py-8">
+                        <div className="w-16 h-16 rounded-full bg-neon-purple/10 flex items-center justify-center mx-auto mb-6">
+                          <MessageSquare className="w-8 h-8 text-neon-purple" />
                         </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="vehicles" className="mt-0 animate-fade-in">
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">Your Vehicles</h2>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-1 border-white/10 hover:bg-white/5"
-                    onClick={handleAddVehicle}
-                  >
-                    <Car className="h-4 w-4" />
-                    <span>Add Vehicle</span>
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {mockVehicles.map((vehicle) => (
-                    <VehicleCard 
-                      key={vehicle.id}
-                      {...vehicle}
-                      onDelete={handleDeleteVehicle}
-                      onEdit={handleEditVehicle}
-                    />
-                  ))}
-                  
-                  <div 
-                    className="glass-card rounded-xl flex flex-col items-center justify-center p-8 border border-dashed border-white/20 hover:border-neon-blue/50 transition-colors cursor-pointer min-h-[300px]"
-                    onClick={handleAddVehicle}
-                  >
-                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                      <Plus className="w-8 h-8 text-neon-blue" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">Add New Vehicle</h3>
-                    <p className="text-foreground/70 text-center">Track maintenance and get personalized service reminders</p>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="maintenance" className="mt-0 animate-fade-in">
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">Maintenance Schedule</h2>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-1 border-white/10 hover:bg-white/5"
-                  >
-                    <CalendarPlus className="h-4 w-4" />
-                    <span>Add Service</span>
-                  </Button>
-                </div>
-                
-                <div className="space-y-4">
-                  {mockMaintenanceTasks.map((task) => (
-                    <MaintenanceItem
-                      key={task.id}
-                      {...task}
-                      onView={handleViewMaintenance}
-                      onComplete={handleCompleteMaintenance}
-                    />
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="ai-assistant" className="mt-0 animate-fade-in">
-              <div className="mb-6">
-                <Card className="bg-dark-card border-white/10">
-                  <CardContent className="p-6">
-                    <div className="text-center max-w-2xl mx-auto py-8">
-                      <div className="w-16 h-16 rounded-full bg-neon-purple/10 flex items-center justify-center mx-auto mb-6">
-                        <MessageSquare className="w-8 h-8 text-neon-purple" />
+                        <h2 className="text-2xl font-bold mb-3">
+                          AI Repair Assistant
+                        </h2>
+                        <p className="text-foreground/70 mb-6">
+                          Get expert advice on vehicle repairs, maintenance tips, and DIY guidance. 
+                          Our AI assistant can help diagnose issues and provide step-by-step 
+                          instructions for common repairs.
+                        </p>
+                        <Button className="bg-neon-purple hover:bg-neon-purple/90 text-white">
+                          Start Conversation
+                        </Button>
                       </div>
-                      <h2 className="text-2xl font-bold mb-3">
-                        AI Repair Assistant
-                      </h2>
-                      <p className="text-foreground/70 mb-6">
-                        Get expert advice on vehicle repairs, maintenance tips, and DIY guidance. 
-                        Our AI assistant can help diagnose issues and provide step-by-step 
-                        instructions for common repairs.
-                      </p>
-                      <Button className="bg-neon-purple hover:bg-neon-purple/90 text-white">
-                        Start Conversation
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
       </main>
       
@@ -440,74 +643,71 @@ const Dashboard = () => {
           </DialogHeader>
           
           <div className="py-4">
-            <form className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Make</label>
-                  <input
-                    className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                    placeholder="e.g. Toyota"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Model</label>
-                  <input
-                    className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                    placeholder="e.g. Camry"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Year</label>
-                  <input
-                    type="number"
-                    className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                    placeholder="e.g. 2020"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Current Mileage</label>
-                  <input
-                    type="number"
-                    className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                    placeholder="e.g. 45000"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">VIN (Optional)</label>
-                <input
-                  className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                  placeholder="Vehicle Identification Number"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Vehicle Photo (Optional)</label>
-                <div className="border border-dashed border-white/20 rounded-md p-8 text-center">
-                  <Car className="w-10 h-10 text-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm text-foreground/70">
-                    Drag and drop an image or <span className="text-neon-blue cursor-pointer">browse</span>
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-3 pt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsAddVehicleOpen(false)}
-                  className="border-white/10 hover:bg-white/5"
-                >
-                  Cancel
-                </Button>
-                <Button className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
-                  Add Vehicle
-                </Button>
-              </div>
-            </form>
+            <AddVehicleForm 
+              onSubmit={async (data) => {
+                const success = await addVehicle(data);
+                if (success) {
+                  setIsAddVehicleOpen(false);
+                }
+              }}
+              onCancel={() => setIsAddVehicleOpen(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Vehicle Dialog */}
+      <Dialog open={isEditVehicleOpen} onOpenChange={setIsEditVehicleOpen}>
+        <DialogContent className="sm:max-w-[525px] bg-dark-card border-white/10 text-foreground">
+          <DialogHeader>
+            <DialogTitle>Edit Vehicle</DialogTitle>
+            <DialogDescription>
+              Update your vehicle information below.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {selectedVehicle && (
+              <EditVehicleForm 
+                vehicle={selectedVehicle}
+                onSubmit={async (data) => {
+                  const success = await updateVehicle(selectedVehicle.id, data);
+                  if (success) {
+                    setIsEditVehicleOpen(false);
+                    setSelectedVehicle(null);
+                  }
+                }}
+                onCancel={() => {
+                  setIsEditVehicleOpen(false);
+                  setSelectedVehicle(null);
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Add Maintenance Dialog */}
+      <Dialog open={isAddMaintenanceOpen} onOpenChange={setIsAddMaintenanceOpen}>
+        <DialogContent className="sm:max-w-[525px] bg-dark-card border-white/10 text-foreground">
+          <DialogHeader>
+            <DialogTitle>Add Maintenance Record</DialogTitle>
+            <DialogDescription>
+              Enter maintenance details below.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <AddMaintenanceForm 
+              vehicles={vehicles}
+              onSubmit={async (data) => {
+                const success = await addMaintenanceRecord(data);
+                if (success) {
+                  setIsAddMaintenanceOpen(false);
+                }
+              }}
+              onCancel={() => setIsAddMaintenanceOpen(false)}
+            />
           </div>
         </DialogContent>
       </Dialog>
