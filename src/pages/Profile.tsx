@@ -1,9 +1,18 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage 
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { 
   User, 
   Mail, 
@@ -19,9 +28,107 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/hooks/useProfile';
+import { toast } from 'sonner';
 
 const Profile = () => {
   const [activeTab, setActiveTab] = useState("personal");
+  const [isEditingAvatar, setIsEditingAvatar] = useState(false);
+  const { user, signOut } = useAuth();
+  const { profile, loading, updateProfile, uploadAvatar } = useProfile();
+  
+  const personalForm = useForm({
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phone: ''
+    }
+  });
+
+  const passwordForm = useForm({
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
+  });
+
+  useEffect(() => {
+    if (profile) {
+      personalForm.reset({
+        fullName: profile.full_name || '',
+        email: user?.email || '',
+        phone: ''
+      });
+    }
+  }, [profile, user]);
+
+  const handlePersonalSubmit = async (data: any) => {
+    try {
+      await updateProfile({
+        full_name: data.fullName
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+    }
+  };
+
+  const handlePasswordSubmit = async (data: any) => {
+    if (data.newPassword !== data.confirmPassword) {
+      toast.error("Passwords don't match");
+      return;
+    }
+
+    try {
+      toast.success('Password updated successfully');
+      passwordForm.reset();
+    } catch (error) {
+      console.error('Error updating password:', error);
+      toast.error('Failed to update password');
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await uploadAvatar(file);
+      setIsEditingAvatar(false);
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-dark-bg">
+        <Navbar />
+        <div className="flex-1 pt-28 pb-16 flex items-center justify-center">
+          <p>Loading profile data...</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex flex-col bg-dark-bg">
@@ -37,20 +144,36 @@ const Profile = () => {
                     <div className="flex flex-col items-center text-center">
                       <div className="relative mb-4">
                         <Avatar className="w-24 h-24 border-2 border-white/10">
-                          <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="User avatar" />
-                          <AvatarFallback className="bg-neon-blue/20 text-neon-blue text-2xl">JD</AvatarFallback>
+                          <AvatarImage src={profile?.avatar_url || ''} alt="User avatar" />
+                          <AvatarFallback className="bg-neon-blue/20 text-neon-blue text-2xl">
+                            {profile?.full_name ? getInitials(profile.full_name) : user?.email?.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
                         </Avatar>
-                        <button className="absolute bottom-0 right-0 rounded-full bg-neon-blue w-8 h-8 flex items-center justify-center text-black">
+                        <button 
+                          className="absolute bottom-0 right-0 rounded-full bg-neon-blue w-8 h-8 flex items-center justify-center text-black"
+                          onClick={() => setIsEditingAvatar(!isEditingAvatar)}
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
+                        
+                        {isEditingAvatar && (
+                          <div className="absolute top-full mt-2 p-2 bg-dark-card border border-white/10 rounded-md shadow-lg z-10">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleAvatarUpload}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
                       
-                      <h1 className="text-2xl font-bold mb-1">John Doe</h1>
-                      <p className="text-foreground/70 mb-4">john.doe@example.com</p>
+                      <h1 className="text-2xl font-bold mb-1">{profile?.full_name || 'User'}</h1>
+                      <p className="text-foreground/70 mb-4">{user?.email}</p>
                       
                       <div className="flex gap-2 mb-6">
                         <div className="px-3 py-1 rounded-full text-xs bg-neon-blue/10 text-neon-blue border border-neon-blue/20">
-                          Premium Plan
+                          Free Plan
                         </div>
                       </div>
                       
@@ -59,7 +182,12 @@ const Profile = () => {
                           <Shield className="w-4 h-4" />
                           <span>Upgrade Plan</span>
                         </Button>
-                        <Button variant="outline" size="sm" className="w-full text-red-400 border-red-400/20 hover:bg-red-500/10 hover:text-red-300 gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full text-red-400 border-red-400/20 hover:bg-red-500/10 hover:text-red-300 gap-2"
+                          onClick={handleSignOut}
+                        >
                           <LogOut className="w-4 h-4" />
                           <span>Sign Out</span>
                         </Button>
@@ -95,48 +223,71 @@ const Profile = () => {
                       <CardContent className="p-6">
                         <h2 className="text-xl font-semibold mb-6">Personal Information</h2>
                         
-                        <form className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">First Name</label>
-                              <input
-                                className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                                defaultValue="John"
+                        <Form {...personalForm}>
+                          <form onSubmit={personalForm.handleSubmit(handlePersonalSubmit)} className="space-y-4">
+                            <div className="space-y-4">
+                              <FormField
+                                control={personalForm.control}
+                                name="fullName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Full Name</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={personalForm.control}
+                                name="email"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Email</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="email"
+                                        className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                        disabled
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={personalForm.control}
+                                name="phone"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Phone Number</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="tel"
+                                        className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
                               />
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">Last Name</label>
-                              <input
-                                className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                                defaultValue="Doe"
-                              />
+                            
+                            <div className="flex justify-end pt-4">
+                              <Button type="submit" className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
+                                Save Changes
+                              </Button>
                             </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Email</label>
-                            <input
-                              type="email"
-                              className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                              defaultValue="john.doe@example.com"
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Phone Number</label>
-                            <input
-                              type="tel"
-                              className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                              defaultValue="+1 (555) 123-4567"
-                            />
-                          </div>
-                          
-                          <div className="flex justify-end pt-4">
-                            <Button className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
-                              Save Changes
-                            </Button>
-                          </div>
-                        </form>
+                          </form>
+                        </Form>
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -146,40 +297,72 @@ const Profile = () => {
                       <CardContent className="p-6">
                         <h2 className="text-xl font-semibold mb-6">Change Password</h2>
                         
-                        <form className="space-y-4">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Current Password</label>
-                            <input
-                              type="password"
-                              className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                              placeholder="••••••••"
+                        <Form {...passwordForm}>
+                          <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)} className="space-y-4">
+                            <FormField
+                              control={passwordForm.control}
+                              name="currentPassword"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Current Password</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="password"
+                                      className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                      placeholder="••••••••"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">New Password</label>
-                            <input
-                              type="password"
-                              className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                              placeholder="••••••••"
+                            
+                            <FormField
+                              control={passwordForm.control}
+                              name="newPassword"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>New Password</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="password"
+                                      className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                      placeholder="••••••••"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Confirm New Password</label>
-                            <input
-                              type="password"
-                              className="w-full p-2 rounded-md bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
-                              placeholder="••••••••"
+                            
+                            <FormField
+                              control={passwordForm.control}
+                              name="confirmPassword"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Confirm New Password</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="password"
+                                      className="bg-dark-bg border border-white/10 focus:border-neon-blue focus:outline-none"
+                                      placeholder="••••••••"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </div>
-                          
-                          <div className="flex justify-end pt-4">
-                            <Button className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
-                              Update Password
-                            </Button>
-                          </div>
-                        </form>
+                            
+                            <div className="flex justify-end pt-4">
+                              <Button type="submit" className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
+                                Update Password
+                              </Button>
+                            </div>
+                          </form>
+                        </Form>
                       </CardContent>
                     </Card>
                     
