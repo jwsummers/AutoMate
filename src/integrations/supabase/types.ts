@@ -9,7 +9,131 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      maintenance_records: {
+        Row: {
+          cost: number | null
+          created_at: string
+          date: string
+          description: string
+          id: string
+          mileage: number | null
+          notes: string | null
+          performed_by: string | null
+          type: string
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          date: string
+          description: string
+          id?: string
+          mileage?: number | null
+          notes?: string | null
+          performed_by?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          mileage?: number | null
+          notes?: string | null
+          performed_by?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_records_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          license_plate: string | null
+          make: string
+          mileage: number | null
+          model: string
+          notes: string | null
+          purchase_date: string | null
+          updated_at: string
+          user_id: string
+          vin: string | null
+          year: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          license_plate?: string | null
+          make: string
+          mileage?: number | null
+          model: string
+          notes?: string | null
+          purchase_date?: string | null
+          updated_at?: string
+          user_id: string
+          vin?: string | null
+          year: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          license_plate?: string | null
+          make?: string
+          mileage?: number | null
+          model?: string
+          notes?: string | null
+          purchase_date?: string | null
+          updated_at?: string
+          user_id?: string
+          vin?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

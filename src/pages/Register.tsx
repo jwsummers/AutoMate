@@ -1,23 +1,33 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Car, EyeOff, Eye, User, Mail, Lock, CheckCircle } from 'lucide-react';
+import { Car, EyeOff, Eye, User, Mail, Lock, CheckCircle, Loader2 } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const { signUp, isLoading, user } = useAuth();
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Registration attempt with:', { name, email, password });
-    // Here would be registration logic
+    await signUp(email, password, { full_name: name });
   };
+  
+  // Password validation
+  const hasMinLength = password.length >= 8;
+  
+  // Redirect if already authenticated
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
   
   return (
     <div className="min-h-screen flex flex-col bg-dark-bg">
@@ -55,6 +65,7 @@ const Register = () => {
                       className="pl-10 py-5 bg-dark-bg border-white/10 focus-visible:ring-neon-blue"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      disabled={isLoading}
                       required
                     />
                   </div>
@@ -75,6 +86,7 @@ const Register = () => {
                       className="pl-10 py-5 bg-dark-bg border-white/10 focus-visible:ring-neon-blue"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
                       required
                     />
                   </div>
@@ -95,12 +107,14 @@ const Register = () => {
                       className="pl-10 pr-10 py-5 bg-dark-bg border-white/10 focus-visible:ring-neon-blue"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
                       required
                     />
                     <button
                       type="button"
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-foreground/50 hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? (
                         <EyeOff className="w-5 h-5" />
@@ -113,8 +127,8 @@ const Register = () => {
                   <div className="text-sm text-foreground/70 space-y-1 mt-2">
                     <p className="text-xs">Password must contain:</p>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className={`w-3.5 h-3.5 ${password.length >= 8 ? 'text-green-500' : 'text-foreground/30'}`} />
-                      <span className={password.length >= 8 ? 'text-foreground' : 'text-foreground/50'}>At least 8 characters</span>
+                      <CheckCircle className={`w-3.5 h-3.5 ${hasMinLength ? 'text-green-500' : 'text-foreground/30'}`} />
+                      <span className={hasMinLength ? 'text-foreground' : 'text-foreground/50'}>At least 8 characters</span>
                     </div>
                   </div>
                 </div>
@@ -124,6 +138,9 @@ const Register = () => {
                     type="checkbox"
                     id="terms"
                     className="mt-1"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    disabled={isLoading}
                     required
                   />
                   <label htmlFor="terms" className="text-sm text-foreground/70">
@@ -134,8 +151,16 @@ const Register = () => {
                 <Button 
                   type="submit" 
                   className="w-full bg-neon-blue hover:bg-neon-blue/90 text-black font-medium py-5"
+                  disabled={isLoading || !hasMinLength || !agreedToTerms}
                 >
-                  Create Account
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    'Create Account'
+                  )}
                 </Button>
               </form>
               

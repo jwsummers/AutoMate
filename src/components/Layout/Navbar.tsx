@@ -2,12 +2,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Menu, X, Car, User, LogIn } from "lucide-react";
+import { Menu, X, Car, User, LogIn, LogOut } from "lucide-react";
+import { useAuth } from '@/contexts/AuthContext';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,11 +24,16 @@ const Navbar = () => {
     setIsMobileMenuOpen(false);
   };
 
-  const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'Pricing', path: '/pricing' },
-  ];
+  // Dynamic navigation links based on authentication status
+  const navLinks = user 
+    ? [
+        { name: 'Dashboard', path: '/dashboard' },
+        { name: 'Profile', path: '/profile' },
+      ]
+    : [
+        { name: 'Home', path: '/' },
+        { name: 'Pricing', path: '/pricing' },
+      ];
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -60,17 +67,31 @@ const Navbar = () => {
             ))}
           </ul>
           <div className="flex items-center gap-3">
-            <Link to="/login">
-              <Button variant="outline" size="sm" className="gap-2 border-white/10 hover:bg-white/5">
-                <LogIn className="w-4 h-4" />
-                <span>Login</span>
+            {user ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-white/10 hover:bg-white/5"
+                onClick={() => signOut()}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out</span>
               </Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm" className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
-                Sign Up
-              </Button>
-            </Link>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="outline" size="sm" className="gap-2 border-white/10 hover:bg-white/5">
+                    <LogIn className="w-4 h-4" />
+                    <span>Login</span>
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button size="sm" className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </nav>
 
@@ -104,24 +125,37 @@ const Navbar = () => {
               </li>
             ))}
             <li className="pt-4 mt-4 border-t border-white/10">
-              <Link 
-                to="/login" 
-                className="flex items-center gap-2 py-3 px-4 text-lg font-medium rounded-md text-foreground hover:bg-white/5"
-                onClick={closeMobileMenu}
-              >
-                <LogIn className="w-5 h-5" />
-                <span>Login</span>
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/register" 
-                className="flex items-center gap-2 py-3 px-4 text-lg font-medium rounded-md bg-neon-blue text-black hover:bg-neon-blue/90"
-                onClick={closeMobileMenu}
-              >
-                <User className="w-5 h-5" />
-                <span>Sign Up</span>
-              </Link>
+              {user ? (
+                <button 
+                  onClick={() => {
+                    signOut();
+                    closeMobileMenu();
+                  }}
+                  className="flex w-full items-center gap-2 py-3 px-4 text-lg font-medium rounded-md text-foreground hover:bg-white/5"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Log Out</span>
+                </button>
+              ) : (
+                <>
+                  <Link 
+                    to="/login" 
+                    className="flex items-center gap-2 py-3 px-4 text-lg font-medium rounded-md text-foreground hover:bg-white/5"
+                    onClick={closeMobileMenu}
+                  >
+                    <LogIn className="w-5 h-5" />
+                    <span>Login</span>
+                  </Link>
+                  <Link 
+                    to="/register" 
+                    className="flex items-center gap-2 py-3 px-4 mt-2 text-lg font-medium rounded-md bg-neon-blue text-black hover:bg-neon-blue/90"
+                    onClick={closeMobileMenu}
+                  >
+                    <User className="w-5 h-5" />
+                    <span>Sign Up</span>
+                  </Link>
+                </>
+              )}
             </li>
           </ul>
         </nav>

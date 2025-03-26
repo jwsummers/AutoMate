@@ -1,22 +1,28 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Car, EyeOff, Eye, Mail, Lock } from 'lucide-react';
+import { Car, EyeOff, Eye, Mail, Lock, Loader2 } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const { signIn, isLoading, user } = useAuth();
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempt with:', { email, password });
-    // Here would be authentication logic
+    await signIn(email, password);
   };
+  
+  // Redirect if already authenticated
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
   
   return (
     <div className="min-h-screen flex flex-col bg-dark-bg">
@@ -54,6 +60,7 @@ const Login = () => {
                       className="pl-10 py-5 bg-dark-bg border-white/10 focus-visible:ring-neon-blue"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
                       required
                     />
                   </div>
@@ -79,12 +86,14 @@ const Login = () => {
                       className="pl-10 pr-10 py-5 bg-dark-bg border-white/10 focus-visible:ring-neon-blue"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
                       required
                     />
                     <button
                       type="button"
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-foreground/50 hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? (
                         <EyeOff className="w-5 h-5" />
@@ -98,8 +107,16 @@ const Login = () => {
                 <Button 
                   type="submit" 
                   className="w-full bg-neon-blue hover:bg-neon-blue/90 text-black font-medium py-5"
+                  disabled={isLoading}
                 >
-                  Sign In
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing In...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
                 </Button>
               </form>
               
