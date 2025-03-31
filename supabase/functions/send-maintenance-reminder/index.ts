@@ -1,101 +1,297 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.29.0";
 import { Resend } from "npm:resend@2.0.0";
 
-// Initialize Resend client for email sending
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
-// Configure CORS headers
+// Define CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface MaintenancePrediction {
   id: string;
-  vehicleId: string;
   type: string;
-  title: string;
-  description: string;
-  predictedDate: string;
-  predictedMileage: number | null;
-  confidence: number;
-  vehicleName: string;
+  serviceName: string;
   daysUntilDue: number;
-  userId: string;
-  userEmail: string;
+  milesUntilDue: number;
+  vehicleId: string;
+  vehicleName: string;
 }
 
-interface ReminderRequest {
-  predictions?: MaintenancePrediction[];
-  userId?: string;
-  forceEmail?: boolean;
+interface User {
+  id: string;
+  email: string;
+  user_metadata: {
+    full_name?: string;
+  };
 }
 
-const handler = async (req: Request): Promise<Response> => {
+interface ReminderPreferences {
+  id: string;
+  user_id: string;
+  email_reminders: boolean;
+  push_reminders: boolean;
+  reminder_days_before: number[];
+  last_reminded_at: string | null;
+}
+
+interface Vehicle {
+  id: string;
+  make: string;
+  model: string;
+  year: number;
+}
+
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("Starting maintenance reminder function");
-    
-    // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Missing Supabase environment variables");
+    }
+    if (!resendApiKey) {
+      throw new Error("Missing Resend API key");
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { predictions, userId, forceEmail } = (await req.json()) as ReminderRequest;
-    
-    // Process specific predictions if provided
-    if (predictions && predictions.length > 0) {
-      console.log(`Processing ${predictions.length} specific predictions`);
-      
-      for (const prediction of predictions) {
-        if (prediction.userEmail) {
-          await sendReminderEmail(prediction);
-          await recordReminderSent(supabase, prediction.userId, prediction.vehicleId, prediction.id, "email");
+    const resend = new Resend(resendApiKey);
+
+    // Parse request body
+    const requestData = await req.json();
+    const { userId, forceEmail = false } = requestData;
+
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
+    // Get the user data
+    const { data: userData, error: userError } = await supabase
+      .auth
+      .admin
+      .getUserById(userId);
+
+    if (userError || !userData) {
+      throw new Error(`Error fetching user: ${userError?.message || "User not found"}`);
+    }
+
+    const user = userData.user as unknown as User;
+
+    // Get user's reminder preferences
+    const { data: reminderPrefs, error: prefError } = await supabase
+      .from("reminder_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (prefError) {
+      throw new Error(`Error fetching reminder preferences: ${prefError.message}`);
+    }
+
+    // If no preferences found or email reminders disabled and not forcing, exit
+    if (!reminderPrefs || (!reminderPrefs.email_reminders && !forceEmail)) {
+      return new Response(
+        JSON.stringify({ message: "No email reminders to send" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    const preferences = reminderPrefs as ReminderPreferences;
+
+    // Get user's vehicles
+    const { data: vehicles, error: vehiclesError } = await supabase
+      .from("vehicles")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (vehiclesError) {
+      throw new Error(`Error fetching vehicles: ${vehiclesError.message}`);
+    }
+
+    if (!vehicles || vehicles.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "User has no vehicles" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // For a test email, we'll just create some sample predictions
+    let maintenancePredictions: MaintenancePrediction[] = [];
+    
+    if (forceEmail) {
+      // Create sample predictions for test email
+      const vehicle = vehicles[0] as Vehicle;
+      maintenancePredictions = [
+        {
+          id: "test-prediction-1",
+          type: "oil_change",
+          serviceName: "Oil Change",
+          daysUntilDue: 7,
+          milesUntilDue: 500,
+          vehicleId: vehicle.id,
+          vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        },
+        {
+          id: "test-prediction-2",
+          type: "tire_rotation",
+          serviceName: "Tire Rotation",
+          daysUntilDue: 14,
+          milesUntilDue: 1000,
+          vehicleId: vehicle.id,
+          vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        }
+      ];
+    } else {
+      // TODO: Get actual maintenance predictions that are due
+      // This would involve more complex logic with your prediction system
+      // ...
+    }
+
+    if (maintenancePredictions.length === 0 && !forceEmail) {
+      return new Response(
+        JSON.stringify({ message: "No maintenance due soon" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Send email reminder
+    if (preferences.email_reminders || forceEmail) {
+      // Build HTML content
+      const userName = user.user_metadata?.full_name || "there";
+      let maintenanceItems = "";
+      
+      maintenancePredictions.forEach((prediction) => {
+        maintenanceItems += `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.serviceName}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.vehicleName}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">In ${prediction.daysUntilDue} days or ${prediction.milesUntilDue} miles</td>
+        </tr>
+        `;
+      });
+
+      const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Maintenance Reminder</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background-color: #f9f9f9; }
+          table { width: 100%; border-collapse: collapse; }
+          th { text-align: left; padding: 10px; background-color: #eee; }
+          .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #666; }
+          .button { display: inline-block; background-color: #4F46E5; color: white; padding: 10px 20px; 
+                   text-decoration: none; border-radius: 4px; margin-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Maintenance Reminder</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>This is a friendly reminder that you have the following maintenance items due soon:</p>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Vehicle</th>
+                  <th>Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${maintenanceItems}
+              </tbody>
+            </table>
+            
+            <p>Keeping up with regular maintenance helps extend the life of your vehicle and prevents costly repairs down the road.</p>
+            
+            <div style="text-align: center;">
+              <a href="${supabaseUrl}" class="button">View Details</a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>This is an automated reminder from your vehicle maintenance tracker.</p>
+            <p>You can adjust your notification settings in your profile preferences.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+      `;
+
+      try {
+        const emailResponse = await resend.emails.send({
+          from: "Maintenance Reminder <onboarding@resend.dev>",
+          to: [user.email],
+          subject: "Vehicle Maintenance Reminder",
+          html: emailHtml,
+        });
+
+        console.log("Email sent:", emailResponse);
+
+        // Update last reminded timestamp
+        if (!forceEmail) {
+          await supabase
+            .from("reminder_preferences")
+            .update({ last_reminded_at: new Date().toISOString() })
+            .eq("user_id", userId);
+        }
+
+        // Log sent reminders to the sent_reminders table
+        if (maintenancePredictions.length > 0 && !forceEmail) {
+          const sentRemindersData = maintenancePredictions.map((pred) => ({
+            user_id: userId,
+            vehicle_id: pred.vehicleId,
+            maintenance_prediction_id: pred.id,
+            type: pred.type,
+            reminder_type: "email",
+          }));
+
+          await supabase.from("sent_reminders").insert(sentRemindersData);
+        }
+
+      } catch (emailError: any) {
+        console.error("Error sending email:", emailError);
+        throw new Error(`Failed to send email: ${emailError.message}`);
       }
-      
-      return new Response(
-        JSON.stringify({ success: true, count: predictions.length }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
     }
-    
-    // If userId provided, check only that user's predictions
-    if (userId || forceEmail) {
-      console.log(`Processing reminders for user: ${userId}`);
-      await processUserReminders(supabase, userId, Boolean(forceEmail));
-      
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-    
-    // Otherwise check all users with due predictions
-    console.log("Processing reminders for all users");
-    await processAllUserReminders(supabase);
-    
+
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ 
+        success: true, 
+        message: "Reminders sent successfully" 
+      }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
-    console.error("Error in maintenance reminder function:", error);
+
+  } catch (error: any) {
+    console.error("Error in send-maintenance-reminder function:", error);
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       {
@@ -104,230 +300,4 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
   }
-};
-
-// Process reminders for a single user
-async function processUserReminders(
-  supabase: any,
-  userId: string | undefined,
-  forceEmail: boolean = false
-): Promise<void> {
-  // Get user details and their reminder preferences
-  const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
-  if (userError) throw userError;
-  
-  const user = userData.user;
-  if (!user || !user.email) {
-    console.log("User not found or no email available");
-    return;
-  }
-
-  // Get user's reminder preferences
-  const { data: preferences, error: prefError } = await supabase
-    .from("reminder_preferences")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (prefError) throw prefError;
-
-  // Use defaults if no preferences found
-  const reminderPrefs = preferences || {
-    email_reminders: true,
-    reminder_days_before: [14, 7, 1],
-    last_reminded_at: null,
-  };
-
-  if (!reminderPrefs.email_reminders && !forceEmail) {
-    console.log("User has disabled email reminders");
-    return;
-  }
-
-  // Get the user's vehicles
-  const { data: vehicles, error: vehiclesError } = await supabase
-    .from("vehicles")
-    .select("*")
-    .eq("user_id", user.id);
-
-  if (vehiclesError) throw vehiclesError;
-  
-  if (!vehicles || vehicles.length === 0) {
-    console.log("User has no vehicles");
-    return;
-  }
-
-  // Get the user's maintenance records
-  const { data: maintenanceRecords, error: maintenanceError } = await supabase
-    .from("maintenance_records")
-    .select("*")
-    .eq("user_id", user.id);
-
-  if (maintenanceError) throw maintenanceError;
-
-  // Generate predictions (simplified version of the frontend logic)
-  // In a real application, this should either:
-  // 1. Use shared code between frontend and backend
-  // 2. Store predictions in the database
-  
-  // For this example, we'll just pass some basic data
-  // In a real implementation, you'd want to port the prediction logic
-  // from utils/maintenancePredictions.ts to this function
-  
-  // Mock prediction for demo
-  for (const vehicle of vehicles) {
-    const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-    
-    // Check if we've already sent a reminder for this prediction recently
-    const { data: recentReminder } = await supabase
-      .from("sent_reminders")
-      .select("*")
-      .eq("vehicle_id", vehicle.id)
-      .eq("user_id", user.id)
-      .order("sent_at", { ascending: false })
-      .limit(1);
-    
-    const now = new Date();
-    const lastReminderDate = recentReminder && recentReminder.length > 0 
-      ? new Date(recentReminder[0].sent_at) 
-      : new Date(0);
-      
-    // Only send a reminder if it's been at least 3 days since the last one
-    // or if we're forcing an email
-    const daysSinceLastReminder = Math.floor((now.getTime() - lastReminderDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (forceEmail || daysSinceLastReminder >= 3) {
-      // Create a mock prediction for demonstration
-      const mockPrediction: MaintenancePrediction = {
-        id: `mock-${vehicle.id}`,
-        vehicleId: vehicle.id,
-        type: "oil_change",
-        title: "Oil Change",
-        description: `Your ${vehicleName} is due for an oil change soon.`,
-        predictedDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        predictedMileage: (vehicle.mileage || 0) + 500,
-        confidence: 80,
-        vehicleName,
-        daysUntilDue: 7,
-        userId: user.id,
-        userEmail: user.email
-      };
-
-      // Send the email
-      await sendReminderEmail(mockPrediction);
-      
-      // Record that we sent a reminder
-      await recordReminderSent(supabase, user.id, vehicle.id, mockPrediction.id, "email");
-    } else {
-      console.log(`Skipping reminder for ${vehicleName}, last reminder was ${daysSinceLastReminder} days ago`);
-    }
-  }
-
-  // Update the last reminded timestamp
-  await supabase
-    .from("reminder_preferences")
-    .upsert({
-      user_id: user.id,
-      last_reminded_at: new Date().toISOString(),
-    })
-    .eq("user_id", user.id);
-
-  console.log(`Processed reminders for user ${user.email}`);
-}
-
-// Process reminders for all users
-async function processAllUserReminders(supabase: any): Promise<void> {
-  // Get all users with reminder preferences
-  const { data: preferences, error: prefError } = await supabase
-    .from("reminder_preferences")
-    .select("user_id")
-    .eq("email_reminders", true);
-
-  if (prefError) throw prefError;
-
-  if (!preferences || preferences.length === 0) {
-    console.log("No users with reminder preferences found");
-    return;
-  }
-
-  console.log(`Processing reminders for ${preferences.length} users`);
-  
-  // Process each user's reminders
-  for (const pref of preferences) {
-    try {
-      await processUserReminders(supabase, pref.user_id);
-    } catch (error) {
-      console.error(`Error processing reminders for user ${pref.user_id}:`, error);
-      // Continue with next user
-    }
-  }
-
-  console.log(`Completed processing reminders for all users`);
-}
-
-// Send an email reminder for a maintenance prediction
-async function sendReminderEmail(prediction: MaintenancePrediction): Promise<void> {
-  console.log(`Sending reminder email for ${prediction.title} to ${prediction.userEmail}`);
-  
-  try {
-    const predictedDate = new Date(prediction.predictedDate).toLocaleDateString();
-    
-    const emailResponse = await resend.emails.send({
-      from: "AutoMaintenance Reminder <reminders@yourdomain.com>",
-      to: [prediction.userEmail],
-      subject: `Maintenance Reminder: ${prediction.title} for your ${prediction.vehicleName}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #4353fa;">Maintenance Reminder</h2>
-          <p>Hello,</p>
-          <p>This is a friendly reminder about upcoming maintenance for your <strong>${prediction.vehicleName}</strong>:</p>
-          
-          <div style="border-left: 4px solid #4353fa; padding: 10px; background-color: #f8f9fa; margin: 20px 0;">
-            <h3 style="margin-top: 0;">${prediction.title}</h3>
-            <p>${prediction.description}</p>
-            <p><strong>Due:</strong> ${predictedDate} (${prediction.daysUntilDue} days from now)</p>
-            ${prediction.predictedMileage ? 
-              `<p><strong>Predicted at:</strong> ${prediction.predictedMileage.toLocaleString()} miles</p>` : ''}
-            <p><strong>Confidence:</strong> ${prediction.confidence}%</p>
-          </div>
-          
-          <p>Maintaining your vehicle on schedule helps ensure its reliability, safety, and longevity.</p>
-          
-          <p style="margin-top: 30px; font-size: 0.9em; color: #666;">
-            You're receiving this because you signed up for maintenance reminders.
-            <br>
-            <a href="#" style="color: #4353fa;">Manage your notification preferences</a>
-          </p>
-        </div>
-      `,
-    });
-    
-    console.log("Email sent successfully:", emailResponse);
-  } catch (error) {
-    console.error("Error sending reminder email:", error);
-    throw error;
-  }
-}
-
-// Record that a reminder was sent in the database
-async function recordReminderSent(
-  supabase: any,
-  userId: string,
-  vehicleId: string,
-  predictionId: string,
-  reminderType: string
-): Promise<void> {
-  const { error } = await supabase.from("sent_reminders").insert({
-    user_id: userId,
-    vehicle_id: vehicleId,
-    maintenance_prediction_id: predictionId,
-    type: "maintenance",
-    reminder_type: reminderType,
-  });
-
-  if (error) {
-    console.error("Error recording reminder:", error);
-    throw error;
-  }
-}
-
-serve(handler);
+});

@@ -36,7 +36,9 @@ export function useReminderPreferences() {
       
       if (error) throw error;
       
-      setPreferences(data);
+      if (data) {
+        setPreferences(data as ReminderPreferences);
+      }
     } catch (error: any) {
       console.error('Error fetching reminder preferences:', error);
       setError(error.message);
@@ -59,7 +61,7 @@ export function useReminderPreferences() {
       const { error } = await supabase
         .from('reminder_preferences')
         .upsert(preferenceData)
-        .eq('user_id', user.id);
+        .select();
       
       if (error) throw error;
       
