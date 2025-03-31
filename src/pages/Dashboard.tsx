@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CalendarPlus, Car, Clock, LayoutDashboard, MessageSquare, Settings, SlashSquare, BarChart2, Wrench, AlertTriangle, Check, Plus } from 'lucide-react';
+import { CalendarPlus, Car, Clock, LayoutDashboard, MessageSquare, Settings, SlashSquare, BarChart2, Wrench, AlertTriangle, Check, Plus, Brain } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
@@ -13,6 +13,8 @@ import MaintenanceItem from '@/components/common/MaintenanceItem';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles, Vehicle } from '@/hooks/useVehicles';
 import { useMaintenance, MaintenanceWithStatus } from '@/hooks/useMaintenance';
+import { useMaintenancePredictions } from '@/hooks/useMaintenancePredictions';
+import MaintenancePredictions from '@/components/dashboard/MaintenancePredictions';
 import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
 import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
 import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
@@ -118,6 +120,12 @@ const Dashboard = () => {
     markMaintenanceAsCompleted,
     deleteMaintenanceRecord
   } = useMaintenance();
+  
+  const {
+    predictions,
+    urgentPredictions,
+    loading: predictionsLoading
+  } = useMaintenancePredictions();
   
   useEffect(() => {
     const demoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
@@ -230,7 +238,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-dark-card border border-white/10 p-1 mb-8 overflow-x-auto">
+              <TabsList className="grid grid-cols-2 md:grid-cols-5 gap-2 bg-dark-card border border-white/10 p-1 mb-8 overflow-x-auto">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
                   <LayoutDashboard className="h-4 w-4 mr-2" />
                   <span>Overview</span>
@@ -242,6 +250,10 @@ const Dashboard = () => {
                 <TabsTrigger value="maintenance" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
                   <Wrench className="h-4 w-4 mr-2" />
                   <span>Maintenance</span>
+                </TabsTrigger>
+                <TabsTrigger value="predictions" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
+                  <Brain className="h-4 w-4 mr-2" />
+                  <span>AI Predictions</span>
                 </TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue">
                   <MessageSquare className="h-4 w-4 mr-2" />
@@ -283,11 +295,11 @@ const Dashboard = () => {
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-foreground/70 text-sm mb-1">Active Alerts</p>
-                          <h3 className="text-3xl font-bold">{overdueCount}</h3>
+                          <p className="text-foreground/70 text-sm mb-1">AI Alerts</p>
+                          <h3 className="text-3xl font-bold">{!isDemoMode ? urgentPredictions.length : 2}</h3>
                         </div>
                         <div className="bg-red-500/10 p-2 rounded-lg">
-                          <AlertTriangle className="h-5 w-5 text-red-500" />
+                          <Brain className="h-5 w-5 text-red-500" />
                         </div>
                       </div>
                     </CardContent>
@@ -597,6 +609,167 @@ const Dashboard = () => {
                           onComplete={handleCompleteMaintenance}
                         />
                       ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="predictions" className="mt-0 animate-fade-in">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">AI Maintenance Predictions</h2>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-1 border-white/10 hover:bg-white/5"
+                      onClick={handleAddMaintenance}
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      <span>Add Maintenance</span>
+                    </Button>
+                  </div>
+                  
+                  {isDemoMode ? (
+                    <div className="space-y-4">
+                      <Card className="bg-dark-card border-white/10 p-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-lg font-medium">How It Works</h3>
+                            <p className="text-foreground/70">The AI analyzes your vehicle maintenance history to predict future service needs</p>
+                          </div>
+                          <div className="bg-neon-blue/10 p-2 rounded-lg">
+                            <Brain className="h-5 w-5 text-neon-blue" />
+                          </div>
+                        </div>
+                        
+                        <div className="grid md:grid-cols-3 gap-4 mt-4">
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">1. Data Collection</h4>
+                            <p className="text-sm text-foreground/70">Records your maintenance history and vehicle details</p>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">2. Pattern Analysis</h4>
+                            <p className="text-sm text-foreground/70">Identifies intervals between similar maintenance tasks</p>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">3. Smart Predictions</h4>
+                            <p className="text-sm text-foreground/70">Uses your patterns and industry standards to predict future needs</p>
+                          </div>
+                        </div>
+                      </Card>
+                      
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <div className="flex items-start gap-3">
+                            <div className="bg-red-500/10 p-2 rounded-lg">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <h4 className="font-medium">Oil Change Due</h4>
+                                <span className="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-500 font-medium">
+                                  Overdue by 2 days
+                                </span>
+                              </div>
+                              <p className="text-sm text-foreground/70">2022 Tesla Model 3</p>
+                              <p className="text-sm mt-1">Based on your average of 182 days between oil changes</p>
+                              <div className="mt-2 flex items-center text-xs text-foreground/60">
+                                <span>Last service: March 15, 2023 at 12,500 miles • Confidence: 85%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <div className="flex items-start gap-3">
+                            <div className="bg-yellow-500/10 p-2 rounded-lg">
+                              <Clock className="h-4 w-4 text-yellow-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <h4 className="font-medium">Tire Rotation</h4>
+                                <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-500 font-medium">
+                                  Due in 14 days
+                                </span>
+                              </div>
+                              <p className="text-sm text-foreground/70">2019 Toyota Camry</p>
+                              <p className="text-sm mt-1">Predicted at 46,000 miles</p>
+                              <div className="mt-2 flex items-center text-xs text-foreground/60">
+                                <span>Last service: May 3, 2023 at 40,000 miles • Confidence: 78%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <div className="flex items-start gap-3">
+                            <div className="bg-blue-500/10 p-2 rounded-lg">
+                              <Calendar className="h-4 w-4 text-blue-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <h4 className="font-medium">Brake Inspection</h4>
+                                <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 font-medium">
+                                  Due in 45 days
+                                </span>
+                              </div>
+                              <p className="text-sm text-foreground/70">2020 Ford F-150</p>
+                              <p className="text-sm mt-1">Scheduled for October 15, 2023</p>
+                              <div className="mt-2 flex items-center text-xs text-foreground/60">
+                                <span>Based on manufacturer recommendations • Confidence: 70%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (!predictionsLoading && predictions.length === 0 && maintenanceRecords.length < 2) ? (
+                    <Card className="bg-dark-card border-white/10">
+                      <CardContent className="p-6 text-center">
+                        <Brain className="w-16 h-16 mx-auto text-foreground/20 mb-4" />
+                        <h3 className="text-xl font-medium mb-2">Not Enough Data</h3>
+                        <p className="text-foreground/70 max-w-md mx-auto mb-6">
+                          Add at least 2 maintenance records of the same type for a vehicle to enable AI predictions. 
+                          More history means more accurate predictions!
+                        </p>
+                        <Button 
+                          className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
+                          onClick={handleAddMaintenance}
+                        >
+                          Add Maintenance Records
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-6">
+                      <Card className="bg-dark-card border-white/10 p-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-lg font-medium">How It Works</h3>
+                            <p className="text-foreground/70">The AI analyzes your vehicle maintenance history to predict future service needs</p>
+                          </div>
+                          <div className="bg-neon-blue/10 p-2 rounded-lg">
+                            <Brain className="h-5 w-5 text-neon-blue" />
+                          </div>
+                        </div>
+                        
+                        <div className="grid md:grid-cols-3 gap-4 mt-4">
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">1. Data Collection</h4>
+                            <p className="text-sm text-foreground/70">Records your maintenance history and vehicle details</p>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">2. Pattern Analysis</h4>
+                            <p className="text-sm text-foreground/70">Identifies intervals between similar maintenance tasks</p>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg">
+                            <h4 className="font-medium mb-2">3. Smart Predictions</h4>
+                            <p className="text-sm text-foreground/70">Uses your patterns and industry standards to predict future needs</p>
+                          </div>
+                        </div>
+                      </Card>
+                      
+                      <MaintenancePredictions showAll={true} />
                     </div>
                   )}
                 </div>
