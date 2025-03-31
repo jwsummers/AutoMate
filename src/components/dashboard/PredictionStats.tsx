@@ -1,6 +1,6 @@
 
 import { useMaintenancePredictions } from '@/hooks/useMaintenancePredictions';
-import { Brain, AlertTriangle, Clock, Calendar } from 'lucide-react';
+import { Brain, AlertTriangle, Clock, CalendarIcon } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 
 export interface PredictionStatsProps {
@@ -62,7 +62,7 @@ const PredictionStats = ({ className = '' }: PredictionStatsProps) => {
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <div className="bg-blue-500/10 p-2 rounded-lg">
-              <Calendar className="h-5 w-5 text-blue-500" />
+              <CalendarIcon className="h-5 w-5 text-blue-500" />
             </div>
             <div>
               <p className="text-foreground/70 text-sm">Future</p>
