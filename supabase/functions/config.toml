@@ -1,0 +1,5 @@
+
+project_id = "xoqlejueizrdclvlkylj"
+[env]
+SUPABASE_URL = "https://xoqlejueizrdclvlkylj.supabase.co"
+RESEND_API_KEY = ""

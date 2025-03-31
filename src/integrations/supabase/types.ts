@@ -86,6 +86,77 @@ export type Database = {
         }
         Relationships: []
       }
+      reminder_preferences: {
+        Row: {
+          created_at: string
+          email_reminders: boolean
+          id: string
+          last_reminded_at: string | null
+          push_reminders: boolean
+          reminder_days_before: number[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_reminders?: boolean
+          id?: string
+          last_reminded_at?: string | null
+          push_reminders?: boolean
+          reminder_days_before?: number[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_reminders?: boolean
+          id?: string
+          last_reminded_at?: string | null
+          push_reminders?: boolean
+          reminder_days_before?: number[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sent_reminders: {
+        Row: {
+          id: string
+          maintenance_prediction_id: string
+          reminder_type: string
+          sent_at: string
+          type: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          id?: string
+          maintenance_prediction_id: string
+          reminder_type: string
+          sent_at?: string
+          type: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          id?: string
+          maintenance_prediction_id?: string
+          reminder_type?: string
+          sent_at?: string
+          type?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sent_reminders_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           color: string | null
