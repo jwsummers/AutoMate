@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CalendarPlus, Car, Clock, LayoutDashboard, MessageSquare, Settings, SlashSquare, BarChart2, Wrench, AlertTriangle, Check, Plus, Brain } from 'lucide-react';
+import { CalendarPlus, Car, Clock, LayoutDashboard, MessageSquare, Settings, SlashSquare, BarChart2, Wrench, AlertTriangle, Check, Plus, Brain, CalendarIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
@@ -704,7 +704,7 @@ const Dashboard = () => {
                         <div className="p-3 rounded-lg bg-white/5">
                           <div className="flex items-start gap-3">
                             <div className="bg-blue-500/10 p-2 rounded-lg">
-                              <Calendar className="h-4 w-4 text-blue-500" />
+                              <CalendarIcon className="h-4 w-4 text-blue-500" />
                             </div>
                             <div>
                               <div className="flex justify-between">
