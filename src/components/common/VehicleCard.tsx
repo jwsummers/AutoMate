@@ -4,6 +4,7 @@ import { Car, Calendar, MoreVertical, Edit, Trash2, AlertTriangle, Wrench } from
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
+import { Link } from "react-router-dom";
 
 interface VehicleCardProps {
   id: string;
@@ -123,8 +124,13 @@ const VehicleCard = ({
             <Wrench className="w-4 h-4 text-neon-blue" />
             <span>Next service: <span className="text-foreground/70">{nextService}</span></span>
           </div>
-          <Button variant="outline" size="sm" className="border-white/10 hover:bg-white/5">
-            Details
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-white/10 hover:bg-white/5"
+            asChild
+          >
+            <Link to={`/dashboard/vehicles/${id}`}>Details</Link>
           </Button>
         </div>
       </div>

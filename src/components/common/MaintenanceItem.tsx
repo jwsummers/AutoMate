@@ -1,6 +1,7 @@
 
 import { Check, Clock, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export type MaintenanceStatus = 'completed' | 'upcoming' | 'overdue';
 
@@ -12,6 +13,7 @@ interface MaintenanceItemProps {
   status: MaintenanceStatus;
   mileage?: number;
   cost?: number;
+  vehicleId?: string;
   onView?: (id: string) => void;
   onComplete?: (id: string) => void;
 }
@@ -24,6 +26,7 @@ const MaintenanceItem = ({
   status,
   mileage,
   cost,
+  vehicleId,
   onView,
   onComplete
 }: MaintenanceItemProps) => {
@@ -56,6 +59,12 @@ const MaintenanceItem = ({
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const handleViewDetails = () => {
+    if (onView) {
+      onView(id);
+    }
   };
 
   return (
@@ -111,10 +120,12 @@ const MaintenanceItem = ({
               variant="ghost" 
               size="sm" 
               className="hover:bg-white/5 flex items-center gap-1"
-              onClick={() => onView && onView(id)}
+              asChild
             >
-              <span>View Details</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <Link to={`/dashboard/maintenance/${id}`}>
+                <span>View Details</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </Button>
           </div>
         </div>

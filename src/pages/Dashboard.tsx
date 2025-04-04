@@ -128,9 +128,25 @@ const Dashboard = () => {
   } = useMaintenancePredictions();
   
   useEffect(() => {
-    const demoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
+    const params = new URLSearchParams(window.location.search);
+    const demoMode = params.get('demo') === 'true';
+    const editVehicleId = params.get('editVehicle');
+    const addMaintenanceVehicleId = params.get('addMaintenance');
+    
     setIsDemoMode(demoMode);
-  }, []);
+    
+    if (editVehicleId && !isDemoMode) {
+      const vehicle = vehicles.find(v => v.id === editVehicleId);
+      if (vehicle) {
+        setSelectedVehicle(vehicle);
+        setIsEditVehicleOpen(true);
+      }
+    }
+    
+    if (addMaintenanceVehicleId && !isDemoMode) {
+      setIsAddMaintenanceOpen(true);
+    }
+  }, [vehicles]);
   
   const displayVehicles = isDemoMode ? mockVehicles : vehicles;
   
@@ -194,7 +210,7 @@ const Dashboard = () => {
   };
   
   const handleViewMaintenance = (id: string) => {
-    console.log("View maintenance:", id);
+    window.location.href = `/dashboard/maintenance/${id}`;
   };
   
   const handleCompleteMaintenance = (id: string) => {

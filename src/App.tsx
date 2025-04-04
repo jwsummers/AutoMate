@@ -13,6 +13,8 @@ import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import VehicleDetails from "./pages/VehicleDetails";
+import MaintenanceDetails from "./pages/MaintenanceDetails";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ const App = () => (
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard/vehicles/:id" element={<VehicleDetails />} />
+              <Route path="/dashboard/maintenance/:id" element={<MaintenanceDetails />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
             
