@@ -2,6 +2,7 @@
 import { Check, Clock, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 export type MaintenanceStatus = 'completed' | 'upcoming' | 'overdue';
 
@@ -30,6 +31,7 @@ const MaintenanceItem = ({
   onView,
   onComplete
 }: MaintenanceItemProps) => {
+  const [isCompletingStatus, setIsCompletingStatus] = useState(false);
   
   const getStatusIcon = () => {
     switch (status) {
@@ -61,9 +63,14 @@ const MaintenanceItem = ({
     });
   };
 
-  const handleViewDetails = () => {
-    if (onView) {
-      onView(id);
+  const handleComplete = async () => {
+    if (!onComplete) return;
+    
+    try {
+      setIsCompletingStatus(true);
+      await onComplete(id);
+    } finally {
+      setIsCompletingStatus(false);
     }
   };
 
@@ -108,11 +115,12 @@ const MaintenanceItem = ({
             {status === 'upcoming' || status === 'overdue' ? (
               <Button 
                 size="sm" 
-                onClick={() => onComplete && onComplete(id)}
+                onClick={handleComplete}
                 variant="outline" 
+                disabled={isCompletingStatus}
                 className="border-green-500/30 text-green-500 hover:bg-green-500/10"
               >
-                Mark as Complete
+                {isCompletingStatus ? 'Saving...' : 'Mark as Complete'}
               </Button>
             ) : null}
             

@@ -15,6 +15,7 @@ const MaintenanceDetails = () => {
   const { vehicles, loading: vehiclesLoading } = useVehicles();
   const [maintenance, setMaintenance] = useState<any>(null);
   const [vehicle, setVehicle] = useState<any>(null);
+  const [isCompletingStatus, setIsCompletingStatus] = useState(false);
   
   useEffect(() => {
     if (!id || maintenanceLoading) return;
@@ -28,9 +29,19 @@ const MaintenanceDetails = () => {
     }
   }, [id, maintenanceRecords, vehicles, maintenanceLoading, vehiclesLoading]);
   
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!maintenance) return;
-    markMaintenanceAsCompleted(maintenance.id);
+    try {
+      setIsCompletingStatus(true);
+      await markMaintenanceAsCompleted(maintenance.id);
+      // Update local state to reflect the new status
+      setMaintenance({
+        ...maintenance,
+        status: 'completed'
+      });
+    } finally {
+      setIsCompletingStatus(false);
+    }
   };
   
   const handleDelete = () => {
@@ -159,9 +170,13 @@ const MaintenanceDetails = () => {
               
               <div className="flex gap-2">
                 {maintenance.status !== 'completed' && (
-                  <Button onClick={handleComplete} className="bg-green-500 hover:bg-green-600 text-white">
+                  <Button 
+                    onClick={handleComplete} 
+                    disabled={isCompletingStatus}
+                    className="bg-green-500 hover:bg-green-600 text-white"
+                  >
                     <Check className="h-4 w-4 mr-2" />
-                    Mark as Completed
+                    {isCompletingStatus ? 'Saving...' : 'Mark as Completed'}
                   </Button>
                 )}
                 <Button 

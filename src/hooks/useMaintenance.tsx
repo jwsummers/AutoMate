@@ -32,17 +32,19 @@ export function useMaintenance() {
   const { user } = useAuth();
 
   const determineStatus = (record: MaintenanceRecord): MaintenanceStatus => {
+    // Check if the record is marked as completed in the notes
+    if (record.notes && record.notes.includes('COMPLETED:')) {
+      return 'completed';
+    }
+    
     const today = new Date();
     const recordDate = new Date(record.date);
     
-    // If the date is in the past, consider it either completed or overdue
+    // If the date is in the past and not marked as completed, consider it overdue
     if (recordDate < today) {
-      // This is a placeholder logic - in a real app, you might have a 'completed' flag in the database
-      return 'overdue'; // Default to overdue for past dates
-    } else if (recordDate > today) {
-      return 'upcoming';
+      return 'overdue';
     } else {
-      return 'upcoming'; // Same day is upcoming
+      return 'upcoming';
     }
   };
 
@@ -185,10 +187,15 @@ export function useMaintenance() {
       
       if (fetchError) throw fetchError;
       
-      // In a real app, you might have a 'status' field in the database
-      // Here we're simulating completion by updating the notes
-      const notesUpdate = `${record.notes ? record.notes + '\n' : ''}Marked as completed on ${new Date().toLocaleDateString()}`;
+      // Create a completion marker with timestamp
+      const completionMarker = `COMPLETED: ${new Date().toISOString()}`;
       
+      // Prepare the notes update
+      const notesUpdate = record.notes 
+        ? (record.notes.includes('COMPLETED:') ? record.notes : `${record.notes}\n${completionMarker}`)
+        : completionMarker;
+      
+      // Update the record with the completion marker
       const { error } = await supabase
         .from('maintenance_records')
         .update({ notes: notesUpdate })
