@@ -1,4 +1,3 @@
-
 import { Check, Clock, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -130,10 +129,17 @@ const MaintenanceItem = ({
               className="hover:bg-white/5 flex items-center gap-1"
               asChild
             >
-              <Link to={`/dashboard/maintenance/${id}`}>
-                <span>View Details</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              {onView ? (
+                <button onClick={() => onView(id)}>
+                  <span>View Details</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <Link to={`/dashboard/maintenance/${id}`}>
+                  <span>View Details</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
             </Button>
           </div>
         </div>

@@ -18,6 +18,7 @@ import MaintenancePredictions from '@/components/dashboard/MaintenancePrediction
 import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
 import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
 import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
+import VehicleHealthModal from '@/components/dashboard/VehicleHealthModal';
 import { toast } from 'sonner';
 
 const mockVehicles = [
@@ -103,6 +104,8 @@ const Dashboard = () => {
   const [isEditVehicleOpen, setIsEditVehicleOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
+  const [selectedHealthVehicle, setSelectedHealthVehicle] = useState<Vehicle | null>(null);
   
   const { user } = useAuth();
   const { 
@@ -206,6 +209,29 @@ const Dashboard = () => {
     if (vehicle) {
       setSelectedVehicle(vehicle);
       setIsEditVehicleOpen(true);
+    }
+  };
+  
+  const handleViewVehicleHealth = (vehicleId: string) => {
+    if (isDemoMode) {
+      const mockVehicle = mockVehicles.find(v => v.id === vehicleId);
+      if (mockVehicle) {
+        setSelectedHealthVehicle({
+          id: mockVehicle.id,
+          make: mockVehicle.make,
+          model: mockVehicle.model,
+          year: mockVehicle.year,
+          mileage: mockVehicle.mileage,
+          image: mockVehicle.image,
+        } as Vehicle);
+        setIsHealthModalOpen(true);
+      }
+    } else {
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      if (vehicle) {
+        setSelectedHealthVehicle(vehicle);
+        setIsHealthModalOpen(true);
+      }
     }
   };
   
@@ -504,6 +530,14 @@ const Dashboard = () => {
                                         'bg-red-500'
                                       }`}></div>
                                       <span className="font-medium">{healthScore}%</span>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="ml-2 h-8 px-2"
+                                        onClick={() => handleViewVehicleHealth(vehicle.id)}
+                                      >
+                                        Details
+                                      </Button>
                                     </div>
                                   </div>
                                 );
@@ -904,6 +938,13 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <VehicleHealthModal 
+        isOpen={isHealthModalOpen}
+        onClose={() => setIsHealthModalOpen(false)}
+        vehicle={selectedHealthVehicle || undefined}
+        maintenanceRecords={maintenanceRecords}
+      />
     </div>
   );
 };
