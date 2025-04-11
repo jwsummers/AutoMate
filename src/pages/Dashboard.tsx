@@ -491,62 +491,6 @@ const Dashboard = () => {
                         ))
                       )}
                     </div>
-                    
-                    <div className="mt-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold">Vehicle Health</h2>
-                        <Button variant="ghost" size="sm" className="gap-1 hover:bg-white/5">
-                          <BarChart2 className="h-4 w-4" />
-                          <span>Details</span>
-                        </Button>
-                      </div>
-                      
-                      <Card className="bg-dark-card border-white/10">
-                        <CardContent className="p-4">
-                          {displayVehicles.length === 0 ? (
-                            <p className="text-foreground/70 text-center py-6">
-                              Add vehicles to see health status.
-                            </p>
-                          ) : (
-                            <div className="space-y-4">
-                              {displayVehicles.map((vehicle) => {
-                                const healthScore = Math.floor(Math.random() * 30) + 70;
-                                
-                                return (
-                                  <div key={vehicle.id} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
-                                        <Car className="w-5 h-5 text-foreground/70" />
-                                      </div>
-                                      <div>
-                                        <p className="font-medium">{vehicle.make} {vehicle.model}</p>
-                                        <p className="text-sm text-foreground/70">{vehicle.year}</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-3 h-3 rounded-full ${
-                                        healthScore >= 80 ? 'bg-green-500' : 
-                                        healthScore >= 50 ? 'bg-yellow-500' : 
-                                        'bg-red-500'
-                                      }`}></div>
-                                      <span className="font-medium">{healthScore}%</span>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="ml-2 h-8 px-2"
-                                        onClick={() => handleViewVehicleHealth(vehicle.id)}
-                                      >
-                                        Details
-                                      </Button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
                   </div>
                 </div>
               </TabsContent>
