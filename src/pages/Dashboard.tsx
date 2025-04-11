@@ -19,6 +19,7 @@ import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
 import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
 import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
 import VehicleHealthModal from '@/components/dashboard/VehicleHealthModal';
+import AIAssistant from '@/components/dashboard/AIAssistant';
 import { toast } from 'sonner';
 
 const mockVehicles = [
@@ -770,28 +771,9 @@ const Dashboard = () => {
               </TabsContent>
               
               <TabsContent value="ai-assistant" className="mt-0 animate-fade-in">
-                <div className="mb-6">
-                  <Card className="bg-dark-card border-white/10">
-                    <CardContent className="p-6">
-                      <div className="text-center max-w-2xl mx-auto py-8">
-                        <div className="w-16 h-16 rounded-full bg-neon-purple/10 flex items-center justify-center mx-auto mb-6">
-                          <MessageSquare className="w-8 h-8 text-neon-purple" />
-                        </div>
-                        <h2 className="text-2xl font-bold mb-3">
-                          AI Repair Assistant
-                        </h2>
-                        <p className="text-foreground/70 mb-6">
-                          Get expert advice on vehicle repairs, maintenance tips, and DIY guidance. 
-                          Our AI assistant can help diagnose issues and provide step-by-step 
-                          instructions for common repairs.
-                        </p>
-                        <Button className="bg-neon-purple hover:bg-neon-purple/90 text-white">
-                          Start Conversation
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                <Card className="bg-dark-card border-white/10 min-h-[600px] flex flex-col">
+                  <AIAssistant />
+                </Card>
               </TabsContent>
             </Tabs>
           )}

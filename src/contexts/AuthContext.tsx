@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  isPro: boolean; // Added this property to indicate pro status
   signUp: (email: string, password: string, userData?: { full_name?: string }) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,7 +21,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPro, setIsPro] = useState(false); // Default to non-pro
   const navigate = useNavigate();
+  
+  // Function to check if user is a pro member
+  const checkProStatus = async (userId: string) => {
+    try {
+      // This is where you would normally check against a subscriptions table
+      // For this implementation, we'll use user metadata or just mock it
+      
+      // MOCK: For demo purposes, any user with an email containing "pro" is a pro user
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      // This is a mock implementation - in a real app, you'd check subscription status
+      // For demo, users with email containing 'pro' or set directly in metadata are pro
+      const userEmail = user?.email || '';
+      const isPro = userEmail.includes('pro') || (user?.user_metadata?.is_pro === true);
+      
+      setIsPro(isPro);
+    } catch (error) {
+      console.error('Error checking pro status:', error);
+      setIsPro(false);
+    }
+  };
   
   useEffect(() => {
     // Set up the auth state listener first
@@ -29,6 +56,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Only update state synchronously
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
+        
+        // Check pro status when user changes
+        if (currentSession?.user) {
+          checkProStatus(currentSession.user.id);
+        } else {
+          setIsPro(false);
+        }
         
         // Handle specific auth events
         if (event === 'SIGNED_IN') {
@@ -49,6 +83,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      
+      // Check pro status on initial load
+      if (currentSession?.user) {
+        checkProStatus(currentSession.user.id);
+      }
+      
       setIsLoading(false);
     });
     
@@ -110,7 +150,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, isLoading, isPro, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
