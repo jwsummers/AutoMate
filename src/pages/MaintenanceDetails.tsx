@@ -5,17 +5,20 @@ import { useMaintenance } from '@/hooks/useMaintenance';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, Wrench, Car, Calendar, DollarSign, Clock, Check, AlertTriangle, Edit, Trash } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
+import EditMaintenanceForm from '@/components/dashboard/EditMaintenanceForm';
 
 const MaintenanceDetails = () => {
   const { id } = useParams<{ id: string }>();
-  const { maintenanceRecords, loading: maintenanceLoading, deleteMaintenanceRecord, markMaintenanceAsCompleted } = useMaintenance();
+  const { maintenanceRecords, loading: maintenanceLoading, deleteMaintenanceRecord, markMaintenanceAsCompleted, updateMaintenanceRecord } = useMaintenance();
   const { vehicles, loading: vehiclesLoading } = useVehicles();
   const [maintenance, setMaintenance] = useState<any>(null);
   const [vehicle, setVehicle] = useState<any>(null);
   const [isCompletingStatus, setIsCompletingStatus] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   useEffect(() => {
     if (!id || maintenanceLoading) return;
@@ -50,6 +53,19 @@ const MaintenanceDetails = () => {
       deleteMaintenanceRecord(maintenance.id);
       window.location.href = '/dashboard';
     }
+  };
+
+  const handleUpdateMaintenance = async (id: string, updatedData: any) => {
+    const success = await updateMaintenanceRecord(id, updatedData);
+    if (success) {
+      setIsEditModalOpen(false);
+      // Update local state to reflect the changes
+      setMaintenance({
+        ...maintenance,
+        ...updatedData
+      });
+    }
+    return success;
   };
   
   const formatDate = (dateString: string) => {
@@ -169,6 +185,14 @@ const MaintenanceDetails = () => {
               </div>
               
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="border-white/10 hover:bg-white/5"
+                  onClick={() => setIsEditModalOpen(true)}
+                >
+                  <Edit className="h-4 w-4 mr-2 text-neon-blue" />
+                  Edit
+                </Button>
                 {maintenance.status !== 'completed' && (
                   <Button 
                     onClick={handleComplete} 
@@ -298,6 +322,16 @@ const MaintenanceDetails = () => {
                         </Link>
                       </Button>
                       
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2 border-white/10 hover:bg-neon-blue/10 text-neon-blue"
+                        onClick={() => setIsEditModalOpen(true)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        <span>Edit Record</span>
+                      </Button>
+                      
                       {maintenance.status !== 'completed' && (
                         <Button 
                           variant="outline" 
@@ -370,6 +404,23 @@ const MaintenanceDetails = () => {
         </div>
       </main>
       <Footer />
+
+      {/* Edit Maintenance Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="bg-dark-card border border-white/10 sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Maintenance Record</DialogTitle>
+          </DialogHeader>
+          {maintenance && (
+            <EditMaintenanceForm
+              maintenance={maintenance}
+              vehicles={vehicles}
+              onSubmit={handleUpdateMaintenance}
+              onCancel={() => setIsEditModalOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
