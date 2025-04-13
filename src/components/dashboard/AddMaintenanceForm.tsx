@@ -167,7 +167,7 @@ const AddMaintenanceForm = ({ vehicles, onSubmit, onCancel }: AddMaintenanceForm
                 {formData.date ? format(date, "PPP") : <span>Pick a date</span>}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-dark-card border-white/10">
+            <PopoverContent className="w-auto p-0 bg-dark-card border-white/10 z-50 pointer-events-auto">
               <Calendar
                 mode="single"
                 selected={date}
