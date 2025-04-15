@@ -16,13 +16,7 @@ serve(async (req) => {
 
   // Get OpenAI API key from environment variables
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!openAIApiKey) {
-    return new Response(
-      JSON.stringify({ error: 'OpenAI API key not found' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
+  
   try {
     // Create a Supabase client for user verification
     const supabaseClient = createClient(
@@ -67,6 +61,29 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Message is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if OpenAI API key is available
+    if (!openAIApiKey) {
+      // For demo purposes, return a mock response if no API key is set
+      console.log('OPENAI_API_KEY not found. Using mock response.');
+      
+      const mockResponses = [
+        "I'm a demo version of the Auto-Assist AI. To get real responses, the administrator needs to set up the OPENAI_API_KEY in the Supabase secrets.",
+        "For your vehicle maintenance needs, I recommend consulting your vehicle's owner manual or a professional mechanic.",
+        "This is a simulated response. The application is working correctly, but the OpenAI API key has not been configured."
+      ];
+      
+      // Return a random mock response
+      const randomIndex = Math.floor(Math.random() * mockResponses.length);
+      
+      return new Response(
+        JSON.stringify({ 
+          response: mockResponses[randomIndex],
+          isMock: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

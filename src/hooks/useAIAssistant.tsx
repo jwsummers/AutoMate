@@ -43,7 +43,6 @@ export const useAIAssistant = () => {
       
       try {
         // Call Supabase Edge Function to get AI response
-        // Note: In a real implementation, you'd create this edge function
         const { data, error } = await supabase.functions.invoke('ai-assistant', {
           body: { 
             message: content,
@@ -65,6 +64,11 @@ export const useAIAssistant = () => {
         };
         
         setMessages(prev => [...prev, assistantMessage]);
+        
+        // If this is a mock response (no API key), show info toast
+        if (data.isMock) {
+          toast.info("The AI assistant is in demo mode. Contact your administrator to enable full functionality.");
+        }
       } catch (error) {
         console.error('Error communicating with AI:', error);
         toast.error('Failed to get a response from the AI assistant.');
