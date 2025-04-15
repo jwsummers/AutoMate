@@ -48,9 +48,10 @@ serve(async (req) => {
       );
     }
 
-    // Check if user is a pro member (implement your pro check here)
-    // For demo, we'll assume users with email containing 'pro' are pro users
-    const isPro = user.email?.includes('pro') || (user.user_metadata?.is_pro === true);
+    // For testing, we allow all authenticated users to access pro features
+    // Comment out the isPro check entirely for testing
+    // const isPro = user.email?.includes('pro') || (user.user_metadata?.is_pro === true);
+    const isPro = true; // TESTING: Enable for all authenticated users
 
     if (!isPro) {
       return new Response(

@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Session, User } from '@supabase/supabase-js';
@@ -28,9 +27,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const checkProStatus = async (userId: string) => {
     try {
       // This is where you would normally check against a subscriptions table
-      // For this implementation, we'll use user metadata or just mock it
+      // For testing purposes, we're enabling pro mode for all authenticated users
       
-      // MOCK: For demo purposes, any user with an email containing "pro" is a pro user
+      // TESTING: Enable pro features for all authenticated users
+      setIsPro(true);
+      
+      // For demo only, uncomment below to revert to original behavior
+      /* 
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -43,9 +46,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const isPro = userEmail.includes('pro') || (user?.user_metadata?.is_pro === true);
       
       setIsPro(isPro);
+      */
     } catch (error) {
       console.error('Error checking pro status:', error);
-      setIsPro(false);
+      setIsPro(true); // For testing, default to true even on error
     }
   };
   
