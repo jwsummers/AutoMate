@@ -55,6 +55,22 @@ export const useAIAssistant = () => {
         
         if (error) throw error;
         
+        // Check for quota exceeded error
+        if (data?.errorType === 'quota_exceeded') {
+          toast.error("OpenAI quota exceeded. Please check your API account limits.");
+          
+          // Add error message about quota
+          const quotaMessage: Message = {
+            id: `assistant-quota-${Date.now()}`,
+            role: 'assistant',
+            content: "I'm currently unavailable due to API usage limits. Please try again later or contact the administrator to check the OpenAI account quota.",
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, quotaMessage]);
+          return;
+        }
+        
         // Add AI response to messages
         const assistantMessage: Message = {
           id: `assistant-${Date.now()}`,

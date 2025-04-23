@@ -97,35 +97,53 @@ serve(async (req) => {
       { role: 'user', content: message }
     ];
 
-    // Call OpenAI API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // Using a cost-effective model
-        messages,
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-    });
+    try {
+      // Call OpenAI API
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // Using a cost-effective model
+          messages,
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenAI API error:', errorData);
-      throw new Error(`OpenAI API returned error: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('OpenAI API error:', errorData);
+        
+        // Check for quota exceeded error
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'OpenAI quota exceeded',
+              errorType: 'quota_exceeded',
+              errorDetails: errorData.error.message
+            }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        throw new Error(`OpenAI API returned error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return new Response(
+        JSON.stringify({ 
+          response: data.choices[0].message.content 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (error) {
+      console.error('Error processing request:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    
-    return new Response(
-      JSON.stringify({ 
-        response: data.choices[0].message.content 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     console.error('Error processing request:', error);
     
