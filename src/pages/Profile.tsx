@@ -125,40 +125,38 @@ const Profile = () => {
                   </div>
                   
                   <div className="mt-6 space-y-1">
-                    <TabsList className="flex flex-col bg-transparent space-y-1 h-auto">
-                      <TabsTrigger
-                        value="account"
-                        onClick={() => setActiveTab("account")}
-                        className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
-                      >
-                        <User className="h-4 w-4 mr-2" />
-                        <span>Account</span>
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="subscription"
-                        onClick={() => setActiveTab("subscription")}
-                        className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
-                      >
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        <span>Subscription</span>
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="notifications"
-                        onClick={() => setActiveTab("notifications")}
-                        className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
-                      >
-                        <Bell className="h-4 w-4 mr-2" />
-                        <span>Notifications</span>
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="security"
-                        onClick={() => setActiveTab("security")}
-                        className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
-                      >
-                        <Shield className="h-4 w-4 mr-2" />
-                        <span>Security</span>
-                      </TabsTrigger>
-                    </TabsList>
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                      <TabsList className="flex flex-col bg-transparent space-y-1 h-auto">
+                        <TabsTrigger
+                          value="account"
+                          className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
+                        >
+                          <User className="h-4 w-4 mr-2" />
+                          <span>Account</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="subscription"
+                          className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          <span>Subscription</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="notifications"
+                          className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
+                        >
+                          <Bell className="h-4 w-4 mr-2" />
+                          <span>Notifications</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="security"
+                          className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
+                        >
+                          <Shield className="h-4 w-4 mr-2" />
+                          <span>Security</span>
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </div>
                   
                   <div className="mt-6 pt-6 border-t border-white/10">
