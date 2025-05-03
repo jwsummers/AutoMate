@@ -1,17 +1,30 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface SubscriptionData {
+  subscribed: boolean;
+  plan: string;
+  vehicles_limit: number;
+  maintenance_limit: number;
+  ai_access: boolean;
+  ai_predictions: boolean;
+  current_period_end?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  isPro: boolean; // Added this property to indicate pro status
+  isPro: boolean;
+  subscriptionData: SubscriptionData | null;
   signUp: (email: string, password: string, userData?: { full_name?: string }) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  checkSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,36 +33,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPro, setIsPro] = useState(false); // Default to non-pro
+  const [isPro, setIsPro] = useState(false);
+  const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const navigate = useNavigate();
   
-  // Function to check if user is a pro member
-  const checkProStatus = async (userId: string) => {
+  // Function to check subscription status
+  const checkSubscription = async () => {
     try {
-      // This is where you would normally check against a subscriptions table
-      // For testing purposes, we're enabling pro mode for all authenticated users
+      if (!user) return;
       
-      // TESTING: Enable pro features for all authenticated users
-      setIsPro(true);
+      const { data, error } = await supabase.functions.invoke('check-subscription');
       
-      // For demo only, uncomment below to revert to original behavior
-      /* 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      if (error) {
+        console.error('Error checking subscription:', error);
+        return;
+      }
       
-      // This is a mock implementation - in a real app, you'd check subscription status
-      // For demo, users with email containing 'pro' or set directly in metadata are pro
-      const userEmail = user?.email || '';
-      const isPro = userEmail.includes('pro') || (user?.user_metadata?.is_pro === true);
+      setSubscriptionData(data);
       
-      setIsPro(isPro);
-      */
+      // Set isPro based on subscription data
+      setIsPro(data.ai_access);
     } catch (error) {
-      console.error('Error checking pro status:', error);
-      setIsPro(true); // For testing, default to true even on error
+      console.error('Failed to check subscription:', error);
     }
   };
   
@@ -61,22 +66,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
-        // Check pro status when user changes
-        if (currentSession?.user) {
-          checkProStatus(currentSession.user.id);
-        } else {
-          setIsPro(false);
-        }
-        
         // Handle specific auth events
         if (event === 'SIGNED_IN') {
           // Use setTimeout to defer any data fetching to avoid deadlocks
           setTimeout(() => {
             toast.success('Signed in successfully');
+            checkSubscription();
           }, 0);
         } else if (event === 'SIGNED_OUT') {
           setTimeout(() => {
             toast.info('Signed out');
+            setIsPro(false);
+            setSubscriptionData(null);
             navigate('/');
           }, 0);
         }
@@ -88,9 +89,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       
-      // Check pro status on initial load
+      // Check subscription on initial load
       if (currentSession?.user) {
-        checkProStatus(currentSession.user.id);
+        setTimeout(() => {
+          checkSubscription();
+        }, 0);
       }
       
       setIsLoading(false);
@@ -154,7 +157,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, isPro, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      isLoading, 
+      isPro, 
+      subscriptionData,
+      signUp, 
+      signIn, 
+      signOut,
+      checkSubscription
+    }}>
       {children}
     </AuthContext.Provider>
   );

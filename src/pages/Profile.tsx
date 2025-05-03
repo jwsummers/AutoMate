@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Layout/Navbar';
@@ -9,19 +9,27 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Info, Camera, User, Mail, Shield, Bell } from 'lucide-react';
+import { User, Mail, Shield, Bell, Camera, CreditCard } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
 import ReminderSettings from '@/components/settings/ReminderSettings';
+import SubscriptionSettings from '@/components/settings/SubscriptionSettings';
 
 const Profile = () => {
   const [activeTab, setActiveTab] = useState("account");
-  const { user, signOut } = useAuth();
+  const { user, signOut, checkSubscription } = useAuth();
   const { profile, loading: profileLoading, updateProfile, uploadAvatar } = useProfile();
   
   const [name, setName] = useState(profile?.full_name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Update the name state when profile is loaded
+  useEffect(() => {
+    if (profile?.full_name) {
+      setName(profile.full_name);
+    }
+  }, [profile]);
   
   const handleUpdateProfile = async () => {
     if (!user) return;
@@ -59,6 +67,13 @@ const Profile = () => {
     }
   };
   
+  // Refresh subscription data when tab changes to subscription
+  useEffect(() => {
+    if (activeTab === "subscription") {
+      checkSubscription();
+    }
+  }, [activeTab, checkSubscription]);
+  
   const userInitials = user?.email ? user.email.substring(0, 2).toUpperCase() : '?';
   
   return (
@@ -71,7 +86,7 @@ const Profile = () => {
             <div>
               <h1 className="text-2xl font-bold mb-2">Account Settings</h1>
               <p className="text-foreground/70">
-                Manage your profile and preferences
+                Manage your profile, subscription, and preferences
               </p>
             </div>
           </div>
@@ -118,6 +133,14 @@ const Profile = () => {
                       >
                         <User className="h-4 w-4 mr-2" />
                         <span>Account</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="subscription"
+                        onClick={() => setActiveTab("subscription")}
+                        className="w-full justify-start px-3 py-2 data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue"
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        <span>Subscription</span>
                       </TabsTrigger>
                       <TabsTrigger
                         value="notifications"
@@ -203,6 +226,10 @@ const Profile = () => {
                   </Card>
                 </TabsContent>
                 
+                <TabsContent value="subscription" className="mt-0">
+                  <SubscriptionSettings />
+                </TabsContent>
+                
                 <TabsContent value="notifications" className="mt-0">
                   <ReminderSettings />
                 </TabsContent>
@@ -235,7 +262,7 @@ const Profile = () => {
                       
                       <div className="border-t border-white/10 pt-6">
                         <div className="flex items-start gap-2">
-                          <Info className="h-5 w-5 text-foreground/70" />
+                          <Shield className="h-5 w-5 text-foreground/70" />
                           <p className="text-sm text-foreground/70">
                             For added security, we recommend using a strong, unique password that you don't use for other websites.
                           </p>
