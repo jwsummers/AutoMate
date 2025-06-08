@@ -9,12 +9,11 @@ export async function uploadVehicleImage(file: File, userId: string, vehicleId: 
     // Create a unique file path
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/${vehicleId}/${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${fileName}`;
 
-    // Check if bucket exists, if not, this will be handled by RLS policies
+    // Upload file to storage
     const { error: uploadError } = await supabase.storage
       .from(VEHICLE_IMAGES_BUCKET)
-      .upload(filePath, file);
+      .upload(fileName, file);
 
     if (uploadError) {
       throw uploadError;
@@ -23,7 +22,7 @@ export async function uploadVehicleImage(file: File, userId: string, vehicleId: 
     // Get public URL
     const { data } = supabase.storage
       .from(VEHICLE_IMAGES_BUCKET)
-      .getPublicUrl(filePath);
+      .getPublicUrl(fileName);
 
     return data.publicUrl;
   } catch (error: any) {
@@ -33,14 +32,20 @@ export async function uploadVehicleImage(file: File, userId: string, vehicleId: 
   }
 }
 
-export async function deleteVehicleImage(imagePath: string): Promise<boolean> {
+export async function deleteVehicleImage(imageUrl: string): Promise<boolean> {
   try {
-    // Extract the path from the URL
-    const url = new URL(imagePath);
-    const pathWithBucket = url.pathname;
-    // Remove the /storage/v1/object/public/ prefix and the bucket name
-    const pathParts = pathWithBucket.split('/');
-    const filePath = pathParts.slice(5).join('/'); // Adjust this index based on your URL structure
+    // Extract the file path from the URL
+    const url = new URL(imageUrl);
+    const pathSegments = url.pathname.split('/');
+    
+    // Find the path after the bucket name in the URL
+    // URL structure: /storage/v1/object/public/vehicle-images/path/to/file
+    const bucketIndex = pathSegments.indexOf('vehicle-images');
+    if (bucketIndex === -1) {
+      throw new Error('Invalid image URL format');
+    }
+    
+    const filePath = pathSegments.slice(bucketIndex + 1).join('/');
 
     const { error } = await supabase.storage
       .from(VEHICLE_IMAGES_BUCKET)

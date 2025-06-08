@@ -162,6 +162,7 @@ export type Database = {
           color: string | null
           created_at: string
           id: string
+          image: string | null
           license_plate: string | null
           make: string
           mileage: number | null
@@ -177,6 +178,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          image?: string | null
           license_plate?: string | null
           make: string
           mileage?: number | null
@@ -192,6 +194,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          image?: string | null
           license_plate?: string | null
           make?: string
           mileage?: number | null
