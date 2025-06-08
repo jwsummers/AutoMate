@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -342,15 +343,10 @@ const Index = () => {
             <p className="text-lg text-foreground/70 mb-8">
               Join thousands of satisfied users and experience the AutoMate difference
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex justify-center">
               <Link to="/register">
-                <Button size="lg" className="w-full sm:w-auto bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
+                <Button size="lg" className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium">
                   Start Your Free Trial
-                </Button>
-              </Link>
-              <Link to="/dashboard">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/10 hover:bg-white/5">
-                  View Demo
                 </Button>
               </Link>
             </div>
