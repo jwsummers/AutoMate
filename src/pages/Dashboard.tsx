@@ -270,6 +270,41 @@ const Dashboard = () => {
             </div>
           )}
           
+          {/* Welcome guidance for new users */}
+          {!isDemoMode && displayVehicles.length === 0 && displayMaintenance.length === 0 && (
+            <Card className="bg-gradient-to-r from-neon-blue/10 to-neon-purple/10 border-white/10 mb-8">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="bg-neon-blue/20 p-3 rounded-full">
+                    <Car className="h-6 w-6 text-neon-blue" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold mb-2">Welcome to AutoMate!</h3>
+                    <p className="text-foreground/70 mb-4">
+                      Get started by adding your first vehicle. Once added, you can track maintenance, 
+                      schedule services, and get AI-powered insights to keep your vehicle running smoothly.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button 
+                        onClick={handleAddVehicle}
+                        className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Your First Vehicle
+                      </Button>
+                      <Button variant="outline" className="border-white/10 hover:bg-white/5">
+                        <Link to="/pricing" className="flex items-center gap-2">
+                          <Crown className="h-4 w-4" />
+                          View Pro Features
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
           {isLoading && !isDemoMode ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin mr-2">
@@ -312,6 +347,9 @@ const Dashboard = () => {
                         <div>
                           <p className="text-foreground/70 text-sm mb-1">Total Vehicles</p>
                           <h3 className="text-3xl font-bold">{displayVehicles.length}</h3>
+                          <p className="text-xs text-foreground/50 mt-1">
+                            {displayVehicles.length === 0 ? "Add your first vehicle to get started" : "Click 'Add Vehicle' to add more"}
+                          </p>
                         </div>
                         <div className="bg-neon-blue/10 p-2 rounded-lg">
                           <Car className="h-5 w-5 text-neon-blue" />
@@ -326,6 +364,9 @@ const Dashboard = () => {
                         <div>
                           <p className="text-foreground/70 text-sm mb-1">Upcoming Services</p>
                           <h3 className="text-3xl font-bold">{upcomingCount}</h3>
+                          <p className="text-xs text-foreground/50 mt-1">
+                            {upcomingCount === 0 ? "No upcoming services scheduled" : "Services requiring attention"}
+                          </p>
                         </div>
                         <div className="bg-neon-purple/10 p-2 rounded-lg">
                           <Clock className="h-5 w-5 text-neon-purple" />
@@ -340,6 +381,9 @@ const Dashboard = () => {
                         <div>
                           <p className="text-foreground/70 text-sm mb-1">AI Alerts</p>
                           <h3 className="text-3xl font-bold">{!isDemoMode ? urgentPredictions.length : 2}</h3>
+                          <p className="text-xs text-foreground/50 mt-1">
+                            Predictive maintenance insights
+                          </p>
                         </div>
                         <div className="bg-red-500/10 p-2 rounded-lg">
                           <Brain className="h-5 w-5 text-red-500" />
@@ -353,7 +397,12 @@ const Dashboard = () => {
                   <div className="lg:col-span-2 space-y-6">
                     <div>
                       <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold">Your Vehicles</h2>
+                        <div>
+                          <h2 className="text-xl font-semibold">Your Vehicles</h2>
+                          <p className="text-foreground/60">
+                            Add vehicles to track maintenance and get service reminders
+                          </p>
+                        </div>
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -367,16 +416,22 @@ const Dashboard = () => {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {displayVehicles.length === 0 ? (
-                          <p className="text-foreground/70 col-span-2 text-center py-10">
-                            You don't have any vehicles yet. 
-                            <Button 
-                              variant="link" 
-                              className="text-neon-blue p-0 h-auto" 
-                              onClick={handleAddVehicle}
-                            >
-                              Add your first vehicle
-                            </Button>
-                          </p>
+                          <Card className="col-span-2 bg-dark-card border-white/10 border-dashed">
+                            <CardContent className="p-8 text-center">
+                              <Car className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
+                              <h3 className="text-lg font-medium mb-2">No Vehicles Added</h3>
+                              <p className="text-foreground/70 mb-4">
+                                Start by adding your first vehicle to track maintenance and get service reminders.
+                              </p>
+                              <Button 
+                                className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
+                                onClick={handleAddVehicle}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Your First Vehicle
+                              </Button>
+                            </CardContent>
+                          </Card>
                         ) : (
                           displayVehicles.slice(0, 2).map((vehicle) => (
                             <VehicleCard 
@@ -458,7 +513,12 @@ const Dashboard = () => {
                   
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold">Upcoming Services</h2>
+                      <div>
+                        <h2 className="text-xl font-semibold">Upcoming Services</h2>
+                        <p className="text-foreground/60">
+                          Schedule and track vehicle maintenance
+                        </p>
+                      </div>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -472,9 +532,24 @@ const Dashboard = () => {
                     
                     <div className="space-y-4">
                       {upcomingMaintenance.length === 0 ? (
-                        <p className="text-foreground/70 text-center py-10">
-                          No upcoming maintenance scheduled.
-                        </p>
+                        <Card className="bg-dark-card border-white/10 border-dashed">
+                          <CardContent className="p-6 text-center">
+                            <Wrench className="w-8 h-8 text-foreground/20 mx-auto mb-3" />
+                            <h3 className="font-medium mb-1">No Services Scheduled</h3>
+                            <p className="text-sm text-foreground/70 mb-4">
+                              Add maintenance records to track your vehicle's service history.
+                            </p>
+                            <Button 
+                              size="sm"
+                              variant="outline" 
+                              className="border-white/10 hover:bg-white/5"
+                              onClick={handleAddMaintenance}
+                            >
+                              <CalendarPlus className="h-4 w-4 mr-2" />
+                              Schedule Service
+                            </Button>
+                          </CardContent>
+                        </Card>
                       ) : (
                         upcomingMaintenance.slice(0, 3).map((task) => (
                           <MaintenanceItem
@@ -498,8 +573,13 @@ const Dashboard = () => {
               
               <TabsContent value="vehicles" className="mt-0 animate-fade-in">
                 <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold">Your Vehicles</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-xl font-semibold">Your Vehicles</h2>
+                      <p className="text-foreground/60">
+                        Manage your vehicle fleet and track maintenance for each one
+                      </p>
+                    </div>
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -516,11 +596,15 @@ const Dashboard = () => {
                       <div className="col-span-full text-center py-12">
                         <Car className="w-16 h-16 text-foreground/20 mx-auto mb-4" />
                         <h3 className="text-xl font-medium mb-2">No Vehicles Found</h3>
-                        <p className="text-foreground/70 mb-6">You haven't added any vehicles yet.</p>
+                        <p className="text-foreground/70 mb-6 max-w-md mx-auto">
+                          Add your first vehicle to start tracking maintenance, get service reminders, 
+                          and access AI-powered insights about your vehicle's health.
+                        </p>
                         <Button 
                           className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
                           onClick={handleAddVehicle}
                         >
+                          <Plus className="h-4 w-4 mr-2" />
                           Add Your First Vehicle
                         </Button>
                       </div>
@@ -552,7 +636,9 @@ const Dashboard = () => {
                               <Plus className="w-8 h-8 text-neon-blue" />
                             </div>
                             <h3 className="text-lg font-medium mb-2">Add New Vehicle</h3>
-                            <p className="text-foreground/70 text-center">Track maintenance and get personalized service reminders</p>
+                            <p className="text-foreground/70 text-center">
+                              Track maintenance and get personalized service reminders for another vehicle
+                            </p>
                           </div>
                         )}
                       </>
@@ -563,8 +649,13 @@ const Dashboard = () => {
               
               <TabsContent value="maintenance" className="mt-0 animate-fade-in">
                 <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold">Maintenance Schedule</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-xl font-semibold">Maintenance Schedule</h2>
+                      <p className="text-foreground/60">
+                        Track completed services and schedule upcoming maintenance
+                      </p>
+                    </div>
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -580,11 +671,15 @@ const Dashboard = () => {
                     <div className="text-center py-12">
                       <Wrench className="w-16 h-16 text-foreground/20 mx-auto mb-4" />
                       <h3 className="text-xl font-medium mb-2">No Maintenance Records</h3>
-                      <p className="text-foreground/70 mb-6">You haven't added any maintenance records yet.</p>
+                      <p className="text-foreground/70 mb-6 max-w-md mx-auto">
+                        Start tracking your vehicle's maintenance history. Add both completed services 
+                        and schedule upcoming maintenance to stay on top of your vehicle's needs.
+                      </p>
                       <Button 
                         className="bg-neon-blue hover:bg-neon-blue/90 text-black font-medium"
                         onClick={handleAddMaintenance}
                       >
+                        <CalendarPlus className="h-4 w-4 mr-2" />
                         Schedule Your First Maintenance
                       </Button>
                     </div>
