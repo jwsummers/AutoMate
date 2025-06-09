@@ -51,11 +51,23 @@ const DashboardModals = ({
   onUpdateMaintenance,
   vehicles
 }: DashboardModalsProps) => {
-  // Create wrapper function for AddVehicleForm that matches expected signature
-  const handleVehicleUpdate = async (data: Partial<Vehicle>) => {
-    // AddVehicleForm doesn't need an update function since it creates new vehicles
-    // This is just a placeholder to satisfy the prop requirements
-    return true;
+  // Wrapper function that matches AddVehicleForm's expected signature
+  const handleAddVehicle = async (data: Omit<Vehicle, 'id'>): Promise<Vehicle> => {
+    const result = await onAddVehicle(data);
+    if (!result) {
+      throw new Error('Failed to add vehicle');
+    }
+    return result;
+  };
+
+  // Wrapper function for updating vehicles (used by AddVehicleForm for image updates)
+  const handleVehicleUpdate = async (data: Partial<Vehicle>): Promise<boolean> => {
+    // This is used by AddVehicleForm to update the vehicle with image after creation
+    // We need the vehicle ID, which should be available in the data
+    if ('id' in data && data.id) {
+      return await onUpdateVehicle(data.id, data);
+    }
+    return false;
   };
 
   return (
@@ -73,7 +85,7 @@ const DashboardModals = ({
             </DialogDescription>
           </DialogHeader>
           <AddVehicleForm
-            onSubmit={onAddVehicle}
+            onSubmit={handleAddVehicle}
             onUpdateVehicle={handleVehicleUpdate}
             onCancel={() => setShowAddVehicle(false)}
           />
