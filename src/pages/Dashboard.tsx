@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -47,6 +48,7 @@ const Dashboard = () => {
       setShowEditVehicle(false);
       setVehicleToEdit(null);
     }
+    return success;
   };
 
   const handleAddMaintenance = (vehicleId: string) => {
@@ -65,6 +67,7 @@ const Dashboard = () => {
       setShowEditMaintenance(false);
       setMaintenanceToEdit(null);
     }
+    return success;
   };
 
   const handleDeleteMaintenance = async (id: string) => {
@@ -74,12 +77,8 @@ const Dashboard = () => {
   };
 
   // Wrapper function for AddVehicleForm that matches expected signature
-  const handleVehicleUpdate = async (updates: Partial<any>) => {
-    // This is used by AddVehicleForm for updating after image upload
-    if (vehicleToEdit) {
-      return await updateVehicle(vehicleToEdit.id, updates);
-    }
-    return false;
+  const handleVehicleUpdateForAdd = async (id: string, updates: Partial<any>) => {
+    return await updateVehicle(id, updates);
   };
 
   useEffect(() => {
@@ -167,7 +166,7 @@ const Dashboard = () => {
           </DialogHeader>
           <AddVehicleForm
             onSubmit={addVehicle}
-            onUpdateVehicle={handleVehicleUpdate}
+            onUpdateVehicle={handleVehicleUpdateForAdd}
             onCancel={() => setShowAddVehicle(false)}
           />
         </DialogContent>
