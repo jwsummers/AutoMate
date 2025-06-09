@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -74,6 +73,15 @@ const Dashboard = () => {
     }
   };
 
+  // Wrapper function for AddVehicleForm that matches expected signature
+  const handleVehicleUpdate = async (updates: Partial<any>) => {
+    // This is used by AddVehicleForm for updating after image upload
+    if (vehicleToEdit) {
+      return await updateVehicle(vehicleToEdit.id, updates);
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (user) {
       fetchVehicles();
@@ -87,9 +95,7 @@ const Dashboard = () => {
       <main className="flex-1 pt-28 pb-16">
         <div className="container mx-auto px-4">
           <DashboardHeader 
-            userName={user?.email?.split('@')[0] || 'User'} 
             onAddVehicle={() => setShowAddVehicle(true)}
-            onAddMaintenance={() => setShowAddMaintenance(true)}
           />
           
           <AIAssistant />
@@ -161,7 +167,7 @@ const Dashboard = () => {
           </DialogHeader>
           <AddVehicleForm
             onSubmit={addVehicle}
-            onUpdateVehicle={updateVehicle}
+            onUpdateVehicle={handleVehicleUpdate}
             onCancel={() => setShowAddVehicle(false)}
           />
         </DialogContent>
