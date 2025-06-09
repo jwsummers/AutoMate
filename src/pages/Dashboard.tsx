@@ -1,20 +1,21 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useMaintenance } from '@/hooks/useMaintenance';
-import { VehicleCard } from '@/components/common/VehicleCard';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { AIAssistant } from '@/components/dashboard/AIAssistant';
-import { PredictionStats } from '@/components/dashboard/PredictionStats';
-import { MaintenancePredictions } from '@/components/dashboard/MaintenancePredictions';
-import { AddVehicleForm } from '@/components/dashboard/AddVehicleForm';
-import { EditVehicleForm } from '@/components/dashboard/EditVehicleForm';
-import { AddMaintenanceForm } from '@/components/dashboard/AddMaintenanceForm';
-import { EditMaintenanceForm } from '@/components/dashboard/EditMaintenanceForm';
+import VehicleCard from '@/components/common/VehicleCard';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import AIAssistant from '@/components/dashboard/AIAssistant';
+import PredictionStats from '@/components/dashboard/PredictionStats';
+import MaintenancePredictions from '@/components/dashboard/MaintenancePredictions';
+import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
+import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
+import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
+import EditMaintenanceForm from '@/components/dashboard/EditMaintenanceForm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Car, Plus } from 'lucide-react';
+import { Car, Plus, Wrench } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
 
