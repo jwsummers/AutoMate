@@ -23,11 +23,17 @@ export interface MaintenancePrediction {
   };
 }
 
+interface VehicleData {
+  id: string;
+  year: number;
+  mileage: number | null;
+}
+
 const MAINTENANCE_INTERVALS = {
   oil_change: { 
     months: 6, 
     miles: 5000, 
-    criticalOverdue: 1000, // miles past due to be critical
+    criticalOverdue: 1000,
     description: "Regular oil changes prevent engine damage"
   },
   brake_service: { 
@@ -74,38 +80,44 @@ const MAINTENANCE_INTERVALS = {
   }
 };
 
-/**
- * Calculate vehicle age in years
- */
+const mapMaintenanceType = (type: string): PredictionType => {
+  const typeMap: Record<string, PredictionType> = {
+    'oil change': 'oil_change',
+    'brake service': 'brake_service',
+    'tire rotation': 'tire_rotation',
+    'air filter': 'air_filter',
+    'transmission service': 'transmission_service',
+    'coolant flush': 'coolant_flush',
+    'spark plugs': 'spark_plugs',
+    'timing belt': 'timing_belt'
+  };
+  
+  return typeMap[type.toLowerCase()] || 'other';
+};
+
 const calculateVehicleAge = (year: number): number => {
   return new Date().getFullYear() - year;
 };
 
-/**
- * Determine maintenance priority based on various factors
- */
 const calculatePriority = (
   type: PredictionType,
   daysOverdue: number,
   milesOverdue: number,
-  vehicleAge: number,
-  currentMileage: number
+  vehicleAge: number
 ): 'critical' | 'high' | 'medium' | 'low' => {
   const interval = MAINTENANCE_INTERVALS[type];
+  if (!interval) return 'low';
   
-  // Critical if significantly overdue
   if (milesOverdue > interval.criticalOverdue || daysOverdue > 30) {
     return 'critical';
   }
   
-  // High priority for safety-critical items or if moderately overdue
   if ((['brake_service', 'timing_belt'].includes(type) && daysOverdue > 0) || 
       (milesOverdue > interval.criticalOverdue / 2) || 
       (daysOverdue > 14)) {
     return 'high';
   }
   
-  // Medium priority if due soon or for older vehicles
   if (daysOverdue > -7 || vehicleAge > 10) {
     return 'medium';
   }
@@ -113,9 +125,6 @@ const calculatePriority = (
   return 'low';
 };
 
-/**
- * Groups maintenance records by type and vehicle
- */
 const groupMaintenanceRecords = (records: MaintenanceWithStatus[]) => {
   const grouped = new Map<string, Map<string, MaintenanceWithStatus[]>>();
   
@@ -134,307 +143,145 @@ const groupMaintenanceRecords = (records: MaintenanceWithStatus[]) => {
     vehicleMap.get(type)!.push(record);
   });
   
-  // Sort each group by date (newest first)
-  grouped.forEach(vehicleMap => {
-    vehicleMap.forEach((records, type) => {
-      vehicleMap.set(
-        type, 
-        records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      );
-    });
-  });
-  
   return grouped;
 };
 
-/**
- * Calculate average time and mileage between maintenance of the same type
- */
-const calculateServiceIntervals = (records: MaintenanceWithStatus[]) => {
-  if (records.length < 2) return { averageDays: null, averageMiles: null };
-  
-  let totalDays = 0;
-  let totalMiles = 0;
-  let mileageCount = 0;
-  
-  const sortedRecords = [...records].sort((a, b) => 
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-  
-  for (let i = 1; i < sortedRecords.length; i++) {
-    const currentRecord = sortedRecords[i];
-    const previousRecord = sortedRecords[i-1];
-    
-    const currentDate = new Date(currentRecord.date);
-    const previousDate = new Date(previousRecord.date);
-    
-    const dayDiff = (currentDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24);
-    totalDays += dayDiff;
-    
-    if (currentRecord.mileage && previousRecord.mileage) {
-      totalMiles += (currentRecord.mileage - previousRecord.mileage);
-      mileageCount++;
-    }
-  }
-  
-  const averageDays = totalDays / (sortedRecords.length - 1);
-  const averageMiles = mileageCount > 0 ? totalMiles / mileageCount : null;
-  
-  return { averageDays, averageMiles };
-};
-
-/**
- * Maps maintenance type from record to standardized prediction type
- */
-const mapMaintenanceType = (type: string): PredictionType => {
-  const lowerType = type.toLowerCase();
-  
-  if (lowerType.includes('oil')) return 'oil_change';
-  if (lowerType.includes('brake')) return 'brake_service';
-  if (lowerType.includes('tire') && lowerType.includes('rotat')) return 'tire_rotation';
-  if (lowerType.includes('air') && lowerType.includes('filter')) return 'air_filter';
-  if (lowerType.includes('transmission')) return 'transmission_service';
-  if (lowerType.includes('coolant') || lowerType.includes('radiator')) return 'coolant_flush';
-  if (lowerType.includes('spark') && lowerType.includes('plug')) return 'spark_plugs';
-  if (lowerType.includes('timing') && lowerType.includes('belt')) return 'timing_belt';
-  
-  return 'other';
-};
-
-/**
- * Generate baseline maintenance predictions for vehicles without history
- */
-const generateBaselinePredictions = (
+const generatePredictionsForVehicle = (
   vehicleId: string,
-  vehicleYear: number,
-  currentMileage: number | null,
-  existingTypes: Set<string>
+  vehicleData: VehicleData,
+  maintenanceHistory: Map<string, MaintenanceWithStatus[]>
 ): MaintenancePrediction[] => {
   const predictions: MaintenancePrediction[] = [];
-  const vehicleAge = calculateVehicleAge(vehicleYear);
-  const mileage = currentMileage || 0;
+  const vehicleAge = calculateVehicleAge(vehicleData.year);
+  const currentMileage = vehicleData.mileage || 0;
   
-  // Generate predictions for common maintenance types not in history
   Object.entries(MAINTENANCE_INTERVALS).forEach(([type, interval]) => {
-    if (type === 'other' || existingTypes.has(type)) return;
-    
     const predictionType = type as PredictionType;
+    const history = maintenanceHistory.get(type) || [];
     
-    // Calculate when service is due based on mileage and time
-    const mileageBasedDate = new Date();
-    const remainingMiles = interval.miles - (mileage % interval.miles);
-    const estimatedDaysToMiles = remainingMiles / 15; // Assume 15 miles per day average
-    mileageBasedDate.setDate(mileageBasedDate.getDate() + estimatedDaysToMiles);
-    
-    const timeBasedDate = new Date();
-    timeBasedDate.setMonth(timeBasedDate.getMonth() + interval.months);
-    
-    // Use the sooner of the two dates
-    const predictedDate = mileageBasedDate < timeBasedDate ? mileageBasedDate : timeBasedDate;
-    const predictedMileage = currentMileage ? currentMileage + remainingMiles : null;
-    
-    // Calculate overdue amounts
-    const daysOverdue = getDaysUntilDue(predictedDate) * -1;
-    const milesOverdue = currentMileage ? Math.max(0, currentMileage - (Math.floor(currentMileage / interval.miles) * interval.miles + interval.miles)) : 0;
-    
-    const priority = calculatePriority(predictionType, daysOverdue, milesOverdue, vehicleAge, mileage);
-    
-    const prediction: MaintenancePrediction = {
-      id: `${vehicleId}-${predictionType}-baseline`,
-      vehicleId,
-      type: predictionType,
-      title: getMaintenanceTitle(predictionType),
-      description: getMaintenanceDescription(predictionType, predictedDate, predictedMileage),
-      predictedDate,
-      predictedMileage,
-      confidence: vehicleAge > 5 ? 75 : 60, // Higher confidence for older vehicles
-      priority,
-      basedOn: {
-        currentMileage,
-        vehicleAge
-      }
+    let predictedDate: Date;
+    let predictedMileage: number | null = null;
+    let confidence: number;
+    let basedOn: MaintenancePrediction['basedOn'] = {
+      currentMileage,
+      vehicleAge
     };
     
-    predictions.push(prediction);
+    if (history.length > 0) {
+      // Calculate based on historical data
+      const lastService = history[0]; // Most recent
+      const lastServiceDate = new Date(lastService.date);
+      const lastServiceMileage = lastService.mileage || 0;
+      
+      basedOn.lastServiceDate = lastServiceDate;
+      basedOn.lastServiceMileage = lastServiceMileage;
+      
+      if (history.length > 1) {
+        // Calculate average intervals
+        const intervals = [];
+        const mileageIntervals = [];
+        
+        for (let i = 0; i < history.length - 1; i++) {
+          const current = new Date(history[i].date);
+          const previous = new Date(history[i + 1].date);
+          const daysDiff = Math.abs((current.getTime() - previous.getTime()) / (1000 * 60 * 60 * 24));
+          intervals.push(daysDiff);
+          
+          if (history[i].mileage && history[i + 1].mileage) {
+            const mileageDiff = Math.abs(history[i].mileage! - history[i + 1].mileage!);
+            mileageIntervals.push(mileageDiff);
+          }
+        }
+        
+        const avgDuration = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        const avgMileage = mileageIntervals.length > 0 
+          ? mileageIntervals.reduce((a, b) => a + b, 0) / mileageIntervals.length 
+          : interval.miles;
+        
+        basedOn.averageDuration = Math.round(avgDuration);
+        basedOn.averageMileage = Math.round(avgMileage);
+        
+        predictedDate = new Date(lastServiceDate.getTime() + avgDuration * 24 * 60 * 60 * 1000);
+        predictedMileage = lastServiceMileage + avgMileage;
+        confidence = 85; // High confidence with historical data
+      } else {
+        // Only one record, use standard intervals
+        predictedDate = new Date(lastServiceDate.getTime() + interval.months * 30 * 24 * 60 * 60 * 1000);
+        predictedMileage = lastServiceMileage + interval.miles;
+        confidence = 65; // Medium confidence
+      }
+    } else {
+      // No history, use baseline recommendations
+      const today = new Date();
+      predictedDate = new Date(today.getTime() + interval.months * 30 * 24 * 60 * 60 * 1000);
+      
+      if (currentMileage > 0) {
+        predictedMileage = currentMileage + interval.miles;
+        confidence = 50; // Lower confidence without history
+      } else {
+        confidence = 30; // Very low confidence without mileage data
+      }
+    }
+    
+    // Calculate if overdue
+    const today = new Date();
+    const daysUntilDue = Math.round((predictedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const milesUntilDue = predictedMileage ? predictedMileage - currentMileage : 0;
+    
+    const priority = calculatePriority(
+      predictionType,
+      -daysUntilDue, // negative means overdue
+      -milesUntilDue, // negative means overdue
+      vehicleAge
+    );
+    
+    predictions.push({
+      id: `${vehicleId}-${type}-${Date.now()}`,
+      vehicleId,
+      type: predictionType,
+      title: interval.description.split(' ')[0] + ' ' + interval.description.split(' ')[1],
+      description: interval.description,
+      predictedDate,
+      predictedMileage,
+      confidence,
+      priority,
+      basedOn
+    });
   });
   
   return predictions;
 };
 
-/**
- * Generate maintenance predictions based on historical data and vehicle information
- */
 export const generateMaintenancePredictions = (
-  records: MaintenanceWithStatus[],
-  vehicles?: Array<{ id: string; year: number; mileage: number | null }>
+  maintenanceRecords: MaintenanceWithStatus[],
+  vehicleData: VehicleData[]
 ): MaintenancePrediction[] => {
+  const groupedRecords = groupMaintenanceRecords(maintenanceRecords);
   const predictions: MaintenancePrediction[] = [];
-  const groupedRecords = groupMaintenanceRecords(records);
   
-  // Create a map of vehicles for easy lookup
-  const vehicleMap = new Map(vehicles?.map(v => [v.id, v]) || []);
-  
-  // Process vehicles with maintenance history
-  groupedRecords.forEach((vehicleMap, vehicleId) => {
-    const vehicle = vehicleMap.get(vehicleId);
-    const vehicleYear = vehicle?.year || new Date().getFullYear();
-    const currentMileage = vehicle?.mileage || null;
-    const vehicleAge = calculateVehicleAge(vehicleYear);
-    
-    const processedTypes = new Set<string>();
-    
-    vehicleMap.forEach((records, type) => {
-      if (records.length === 0 || type === 'other') return;
-      
-      processedTypes.add(type);
-      const latestRecord = records[0];
-      const predictionType = type as PredictionType;
-      
-      const { averageDays, averageMiles } = calculateServiceIntervals(records);
-      const defaultInterval = MAINTENANCE_INTERVALS[predictionType];
-      
-      // Use historical data if available, otherwise use defaults
-      const daysInterval = averageDays && records.length >= 2
-        ? averageDays
-        : defaultInterval.months * 30;
-        
-      const milesInterval = averageMiles && records.length >= 2
-        ? averageMiles
-        : defaultInterval.miles;
-      
-      // Calculate predicted date
-      const lastServiceDate = new Date(latestRecord.date);
-      const predictedDate = new Date(lastServiceDate);
-      predictedDate.setDate(predictedDate.getDate() + daysInterval);
-      
-      // Calculate predicted mileage
-      let predictedMileage = null;
-      if (latestRecord.mileage && milesInterval) {
-        predictedMileage = latestRecord.mileage + milesInterval;
-      } else if (currentMileage) {
-        predictedMileage = currentMileage + defaultInterval.miles;
-      }
-      
-      // Calculate if overdue
-      const daysOverdue = getDaysUntilDue(predictedDate) * -1;
-      const milesOverdue = currentMileage && latestRecord.mileage 
-        ? Math.max(0, currentMileage - (latestRecord.mileage + milesInterval))
-        : 0;
-      
-      // Calculate priority
-      const priority = calculatePriority(predictionType, daysOverdue, milesOverdue, vehicleAge, currentMileage || 0);
-      
-      // Calculate confidence
-      let confidence = 70;
-      if (records.length >= 3) confidence += 20;
-      if (averageDays && averageMiles) confidence += 10;
-      if (records.length >= 5) confidence += 5;
-      
-      const prediction: MaintenancePrediction = {
-        id: `${vehicleId}-${predictionType}-${Date.now()}`,
-        vehicleId,
-        type: predictionType,
-        title: getMaintenanceTitle(predictionType),
-        description: getMaintenanceDescription(predictionType, predictedDate, predictedMileage),
-        predictedDate,
-        predictedMileage,
-        confidence: Math.min(confidence, 95),
-        priority,
-        basedOn: {
-          lastServiceDate,
-          lastServiceMileage: latestRecord.mileage || undefined,
-          averageDuration: averageDays || undefined,
-          averageMileage: averageMiles || undefined,
-          currentMileage,
-          vehicleAge
-        }
-      };
-      
-      predictions.push(prediction);
-    });
-    
-    // Generate baseline predictions for maintenance types not in history
-    const baselinePredictions = generateBaselinePredictions(
-      vehicleId, 
-      vehicleYear, 
-      currentMileage, 
-      processedTypes
-    );
-    predictions.push(...baselinePredictions);
-  });
-  
-  // Generate predictions for vehicles with no maintenance history
-  vehicles?.forEach(vehicle => {
-    if (!groupedRecords.has(vehicle.id)) {
-      const baselinePredictions = generateBaselinePredictions(
-        vehicle.id, 
-        vehicle.year, 
-        vehicle.mileage, 
-        new Set()
-      );
-      predictions.push(...baselinePredictions);
-    }
+  vehicleData.forEach(vehicle => {
+    const vehicleHistory = groupedRecords.get(vehicle.id) || new Map();
+    const vehiclePredictions = generatePredictionsForVehicle(vehicle.id, vehicle, vehicleHistory);
+    predictions.push(...vehiclePredictions);
   });
   
   // Sort by priority and date
   return predictions.sort((a, b) => {
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    }
+    const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+    if (priorityDiff !== 0) return priorityDiff;
+    
     return a.predictedDate.getTime() - b.predictedDate.getTime();
   });
 };
 
-/**
- * Get friendly title for maintenance type
- */
-export const getMaintenanceTitle = (type: PredictionType): string => {
-  switch (type) {
-    case 'oil_change': return 'Oil Change';
-    case 'brake_service': return 'Brake Service';
-    case 'tire_rotation': return 'Tire Rotation';
-    case 'air_filter': return 'Air Filter Replacement';
-    case 'transmission_service': return 'Transmission Service';
-    case 'coolant_flush': return 'Coolant Flush';
-    case 'spark_plugs': return 'Spark Plug Replacement';
-    case 'timing_belt': return 'Timing Belt Replacement';
-    default: return 'Maintenance';
-  }
-};
-
-/**
- * Get friendly description for maintenance predictions
- */
-export const getMaintenanceDescription = (
-  type: PredictionType, 
-  date: Date, 
-  mileage: number | null
-): string => {
-  const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const mileageStr = mileage ? ` or at ${mileage.toLocaleString()} miles` : '';
-  const interval = MAINTENANCE_INTERVALS[type];
-  
-  return `${interval?.description || 'Recommended maintenance'} - Due ${dateStr}${mileageStr}`;
-};
-
-/**
- * Calculate days until a prediction is due
- */
 export const getDaysUntilDue = (predictedDate: Date): number => {
   const today = new Date();
-  const diffTime = predictedDate.getTime() - today.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.round((predictedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-/**
- * Get urgency level based on days until due and priority
- */
-export const getPredictionUrgency = (
-  daysUntilDue: number,
-  priority?: 'critical' | 'high' | 'medium' | 'low'
-): 'high' | 'medium' | 'low' => {
-  if (priority === 'critical' || daysUntilDue <= 7) return 'high';
-  if (priority === 'high' || daysUntilDue <= 30) return 'medium';
+export const getPredictionUrgency = (daysUntilDue: number, priority: string): 'high' | 'medium' | 'low' => {
+  if (daysUntilDue <= 0 || priority === 'critical') return 'high';
+  if (daysUntilDue <= 30 || priority === 'high') return 'medium';
   return 'low';
 };

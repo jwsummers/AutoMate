@@ -18,7 +18,6 @@ interface DashboardModalsProps {
   setVehicleToEdit: (vehicle: Vehicle | null) => void;
   onAddVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<Vehicle | null>;
   onUpdateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<boolean>;
-  onVehicleUpdateForAddForm: (data: Partial<Vehicle>) => Promise<boolean>;
   
   // Maintenance modals
   showAddMaintenance: boolean;
@@ -42,7 +41,6 @@ const DashboardModals = ({
   setVehicleToEdit,
   onAddVehicle,
   onUpdateVehicle,
-  onVehicleUpdateForAddForm,
   showAddMaintenance,
   setShowAddMaintenance,
   showEditMaintenance,
@@ -53,6 +51,13 @@ const DashboardModals = ({
   onUpdateMaintenance,
   vehicles
 }: DashboardModalsProps) => {
+  // Create wrapper function for AddVehicleForm that matches expected signature
+  const handleVehicleUpdate = async (data: Partial<Vehicle>) => {
+    // AddVehicleForm doesn't need an update function since it creates new vehicles
+    // This is just a placeholder to satisfy the prop requirements
+    return true;
+  };
+
   return (
     <>
       {/* Add Vehicle Modal */}
@@ -69,7 +74,7 @@ const DashboardModals = ({
           </DialogHeader>
           <AddVehicleForm
             onSubmit={onAddVehicle}
-            onUpdateVehicle={onVehicleUpdateForAddForm}
+            onUpdateVehicle={handleVehicleUpdate}
             onCancel={() => setShowAddVehicle(false)}
           />
         </DialogContent>
