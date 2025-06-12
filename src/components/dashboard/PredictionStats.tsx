@@ -1,6 +1,6 @@
 
 import { useMaintenancePredictions } from '@/hooks/useMaintenancePredictions';
-import { Brain, AlertTriangle, Clock, CalendarIcon, Bell, Zap } from 'lucide-react';
+import { Brain, AlertTriangle, Clock, CalendarIcon, Bell } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useReminderPreferences } from '@/hooks/useReminderPreferences';
 
@@ -9,13 +9,7 @@ export interface PredictionStatsProps {
 }
 
 const PredictionStats = ({ className = '' }: PredictionStatsProps) => {
-  const { 
-    urgentPredictions, 
-    upcomingPredictions, 
-    futurePredictions,
-    criticalPredictions,
-    loading 
-  } = useMaintenancePredictions();
+  const { urgentPredictions, upcomingPredictions, futurePredictions, loading } = useMaintenancePredictions();
   const { preferences, loading: preferencesLoading } = useReminderPreferences();
   
   if (loading || preferencesLoading) {
@@ -40,30 +34,13 @@ const PredictionStats = ({ className = '' }: PredictionStatsProps) => {
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <div className="bg-red-500/10 p-2 rounded-lg">
-              <Zap className="h-5 w-5 text-red-500" />
+              <AlertTriangle className="h-5 w-5 text-red-500" />
             </div>
             <div>
-              <p className="text-foreground/70 text-sm">Critical</p>
-              <h3 className="text-2xl font-bold">{criticalPredictions.length}</h3>
-              <p className="text-xs text-foreground/70 mt-1">
-                Needs immediate attention
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card className="bg-dark-card border-white/10">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="bg-orange-500/10 p-2 rounded-lg">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
-            </div>
-            <div>
-              <p className="text-foreground/70 text-sm">High Priority</p>
+              <p className="text-foreground/70 text-sm">Urgent</p>
               <h3 className="text-2xl font-bold">{urgentPredictions.length}</h3>
               <p className="text-xs text-foreground/70 mt-1">
-                Due soon or overdue
+                Due within 14 days
               </p>
             </div>
           </div>
@@ -80,7 +57,24 @@ const PredictionStats = ({ className = '' }: PredictionStatsProps) => {
               <p className="text-foreground/70 text-sm">Upcoming</p>
               <h3 className="text-2xl font-bold">{upcomingPredictions.length}</h3>
               <p className="text-xs text-foreground/70 mt-1">
-                Due in 30 days
+                Due in 15-30 days
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Card className="bg-dark-card border-white/10">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-blue-500/10 p-2 rounded-lg">
+              <CalendarIcon className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-foreground/70 text-sm">Future</p>
+              <h3 className="text-2xl font-bold">{futurePredictions.length}</h3>
+              <p className="text-xs text-foreground/70 mt-1">
+                Due after 30 days
               </p>
             </div>
           </div>
@@ -94,12 +88,12 @@ const PredictionStats = ({ className = '' }: PredictionStatsProps) => {
               <Bell className="h-5 w-5 text-neon-purple" />
             </div>
             <div>
-              <p className="text-foreground/70 text-sm">AI Insights</p>
-              <h3 className="text-2xl font-bold">{reminderEnabled ? 'Active' : 'Off'}</h3>
+              <p className="text-foreground/70 text-sm">Reminders</p>
+              <h3 className="text-2xl font-bold">{reminderEnabled ? 'On' : 'Off'}</h3>
               <p className="text-xs text-foreground/70 mt-1">
                 {reminderEnabled 
-                  ? `Smart reminders enabled`
-                  : 'Enable for personalized alerts'}
+                  ? `${reminderDaysCount} reminder ${reminderDaysCount === 1 ? 'day' : 'days'}`
+                  : 'Notifications disabled'}
               </p>
             </div>
           </div>
