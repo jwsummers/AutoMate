@@ -1,69 +1,73 @@
-# Welcome to AutoMate
+# AutoMate 🚗🔧
 
-## Project info
+**AI-Powered Vehicle Maintenance Tracker**
 
-**URL**: https://lovable.dev/projects/17556b00-c532-4867-a6df-0738eb616ec3
+AutoMate is a smart, user-friendly web application designed to help individuals track, manage, and stay on top of vehicle maintenance and repair needs. Built for everyday drivers as well as enthusiasts, AutoMate makes it simple to log services, receive reminders, and even get AI-powered predictions for upcoming issues — all in a modern, clean, and intuitive interface.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🔍 Overview
 
-**Use Lovable**
+AutoMate was created to solve a common problem: remembering what work has been done to your vehicle and knowing what needs to be done next. With decades of combined experience in automotive diagnostics and software development behind its creation, AutoMate bridges the gap between vehicle care and digital convenience.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/17556b00-c532-4867-a6df-0738eb616ec3) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Key Features
 
-**Use your preferred IDE**
+- **Vehicle Dashboard**: Track multiple vehicles with detailed service history and upcoming maintenance.
+- **Service Logging**: Record oil changes, tire rotations, repairs, inspections, and more.
+- **AI-Powered Predictions** _(in development)_: Get proactive alerts for expected maintenance or common issues based on your vehicle's make, model, and usage.
+- **OpenAI Integration**: Chat with an assistant for advice on repairs, service intervals, or diagnostics.
+- **User Authentication**: Secure login and registration with optional subscription tiers.
+- **Dark Mode UI**: Modern, responsive design with clean, professional styling.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🧠 Built With
 
-Follow these steps:
+- **Frontend**: React, Tailwind CSS, TypeScript, Next.js App Router
+- **Backend**: Node.js, Supabase
+- **Auth**: Supabase Authentication _(subject to change based on scaling needs)_
+- **AI Integration**: OpenAI API
+- **Hosting & CI/CD**: Vercel
+- **Dev Tools**: Jest for testing, Prettier & ESLint for formatting and linting
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 💡 Vision & Business Model
 
-# Step 3: Install the necessary dependencies.
-npm i
+AutoMate will transition into a **freemium SaaS model**. The free tier will allow users to track a limited number of vehicles with basic features, while **paid plans** will unlock:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+- Additional vehicle slots
+- Advanced analytics and reports
+- AI diagnostics and service recommendations
+- Priority support and new feature access
 
-**Edit a file directly in GitHub**
+The platform is designed to be efficient, scalable, and easy to use — built by a lifelong automotive professional turned developer.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 📬 Status
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The MVP is under active development, with AI features, payment integration, and polish in progress. Future versions will include:
 
-## What technologies are used for this project?
+- Subscription management via Stripe
+- Vehicle record export/import
+- Automated reminders (email and/or push)
+- Possible React Native app
 
-This project is built with .
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📎 License
 
-## How can I deploy this project?
+This project is proprietary and developed by **Jason Summers / TechTuned Web Design**. Please contact for collaboration or business inquiries.
 
-Simply open [Lovable](https://lovable.dev/projects/17556b00-c532-4867-a6df-0738eb616ec3) and click on Share -> Publish.
+---
 
-## I want to use a custom domain - is that possible?
+## 🔗 Contact
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+**Jason Summers**  
+Founder & Full-Stack Developer  
+[TechTuned Web Design](https://techtunedwebdesign.com)  
+📧 [jwsummers.dev@gmail.com]  
+🔗 [LinkedIn](https://linkedin.com/in/jwsummers) · [GitHub](https://github.com/jwsummers)
