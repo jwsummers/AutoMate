@@ -945,18 +945,17 @@ const Dashboard = () => {
           </DialogHeader>
           
           <div className="py-4">
-            <AddMaintenanceForm 
-              vehicles={vehicles}
-              onSubmit={async (data) => {
-                const success = await addMaintenanceRecord(data);
-                if (success) {
-                  setIsAddMaintenanceOpen(false);
-                  return true;
-                }
-                return false;
-              }}
-              onCancel={() => setIsAddMaintenanceOpen(false)}
-            />
+            <AddMaintenanceForm
+  vehicles={vehicles}
+  onSubmit={async (data) => {
+    const success = await addMaintenanceRecord(data);
+    if (success) {
+      setIsAddMaintenanceOpen(false);
+    }
+  }}
+  onCancel={() => setIsAddMaintenanceOpen(false)}
+/>
+
           </div>
         </DialogContent>
       </Dialog>

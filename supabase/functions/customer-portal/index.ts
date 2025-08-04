@@ -1,14 +1,29 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Dynamic CORS based on request origin
+const allowedOrigins = [
+  'https://automatenance.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:8080',
+];
+function getCorsHeaders(origin: string) {
+  return {
+    'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
 
 serve(async (req) => {
+  const reqOrigin = req.headers.get('origin') || '';
+  const corsHeaders = getCorsHeaders(reqOrigin);
+
+  // Debug: log the incoming request's origin and method
+  console.log('customer-portal - Request Origin:', reqOrigin, 'Method:', req.method);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +31,7 @@ serve(async (req) => {
 
   // Get Stripe API key from environment variables
   const stripeApiKey = Deno.env.get('STRIPE_SECRET_KEY');
-  
+
   try {
     // Create a Supabase client for user verification
     const supabaseClient = createClient(
@@ -24,7 +39,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') || '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: req.headers.get('Authorization') ?? '' },
         },
       }
     );
@@ -51,13 +66,11 @@ serve(async (req) => {
     }
 
     // Initialize Stripe
-    const stripe = new Stripe(stripeApiKey, {
-      apiVersion: '2023-10-16',
-    });
+    const stripe = new Stripe(stripeApiKey, { apiVersion: '2023-10-16' });
 
     // Check if customer exists
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    
+
     if (customers.data.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No Stripe customer found' }),
@@ -66,21 +79,30 @@ serve(async (req) => {
     }
 
     const customerId = customers.data[0].id;
-    
+
+    // Robust return_url (fallback if no origin header)
+    const profileUrl = reqOrigin
+      ? `${reqOrigin}/profile`
+      : 'https://automatenance.vercel.app/profile';
+
     // Create customer portal session
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${req.headers.get('origin')}/profile`,
+      return_url: profileUrl,
     });
 
     return new Response(
       JSON.stringify({ url: session.url }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage =
+      (error && typeof error === 'object' && 'message' in error)
+        ? (error as { message: string }).message
+        : 'Failed to create customer portal session';
     console.error('Error creating customer portal session:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Failed to create customer portal session' }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

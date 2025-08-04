@@ -1,13 +1,21 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.29.0";
 import { Resend } from "npm:resend@2.0.0";
 
-// Define CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Dynamic CORS based on request origin
+const allowedOrigins = [
+  'https://automatenance.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:8080',
+];
+function getCorsHeaders(origin: string) {
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 interface MaintenancePrediction {
   id: string;
@@ -44,6 +52,12 @@ interface Vehicle {
 }
 
 serve(async (req) => {
+  const reqOrigin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(reqOrigin);
+
+  // Debug: log the incoming request's origin and method
+  console.log("send-maintenance-reminder - Request Origin:", reqOrigin, "Method:", req.method);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -54,32 +68,40 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase environment variables");
-    }
-    if (!resendApiKey) {
-      throw new Error("Missing Resend API key");
-    }
+    if (!supabaseUrl || !supabaseKey) throw new Error("Missing Supabase environment variables");
+    if (!resendApiKey) throw new Error("Missing Resend API key");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const resend = new Resend(resendApiKey);
 
     // Parse request body
-    const requestData = await req.json();
+    let requestData: any;
+    try {
+      requestData = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { userId, forceEmail = false } = requestData;
 
     if (!userId) {
-      throw new Error("User ID is required");
+      return new Response(
+        JSON.stringify({ error: "User ID is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Get the user data
-    const { data: userData, error: userError } = await supabase
-      .auth
-      .admin
-      .getUserById(userId);
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
 
     if (userError || !userData) {
-      throw new Error(`Error fetching user: ${userError?.message || "User not found"}`);
+      return new Response(
+        JSON.stringify({ error: `Error fetching user: ${userError?.message || "User not found"}` }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const user = userData.user as unknown as User;
@@ -92,17 +114,17 @@ serve(async (req) => {
       .maybeSingle();
 
     if (prefError) {
-      throw new Error(`Error fetching reminder preferences: ${prefError.message}`);
+      return new Response(
+        JSON.stringify({ error: `Error fetching reminder preferences: ${prefError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // If no preferences found or email reminders disabled and not forcing, exit
     if (!reminderPrefs || (!reminderPrefs.email_reminders && !forceEmail)) {
       return new Response(
         JSON.stringify({ message: "No email reminders to send" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -115,22 +137,22 @@ serve(async (req) => {
       .eq("user_id", userId);
 
     if (vehiclesError) {
-      throw new Error(`Error fetching vehicles: ${vehiclesError.message}`);
+      return new Response(
+        JSON.stringify({ error: `Error fetching vehicles: ${vehiclesError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     if (!vehicles || vehicles.length === 0) {
       return new Response(
         JSON.stringify({ message: "User has no vehicles" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // For a test email, we'll just create some sample predictions
     let maintenancePredictions: MaintenancePrediction[] = [];
-    
+
     if (forceEmail) {
       // Create sample predictions for test email
       const vehicle = vehicles[0] as Vehicle;
@@ -155,18 +177,13 @@ serve(async (req) => {
         }
       ];
     } else {
-      // TODO: Get actual maintenance predictions that are due
-      // This would involve more complex logic with your prediction system
-      // ...
+      // TODO: Implement real predictions here
     }
 
     if (maintenancePredictions.length === 0 && !forceEmail) {
       return new Response(
         JSON.stringify({ message: "No maintenance due soon" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -175,70 +192,67 @@ serve(async (req) => {
       // Build HTML content
       const userName = user.user_metadata?.full_name || "there";
       let maintenanceItems = "";
-      
+
       maintenancePredictions.forEach((prediction) => {
         maintenanceItems += `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.serviceName}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.vehicleName}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">In ${prediction.daysUntilDue} days or ${prediction.milesUntilDue} miles</td>
-        </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.serviceName}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${prediction.vehicleName}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">In ${prediction.daysUntilDue} days or ${prediction.milesUntilDue} miles</td>
+          </tr>
         `;
       });
 
       const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Maintenance Reminder</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          table { width: 100%; border-collapse: collapse; }
-          th { text-align: left; padding: 10px; background-color: #eee; }
-          .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #666; }
-          .button { display: inline-block; background-color: #4F46E5; color: white; padding: 10px 20px; 
-                   text-decoration: none; border-radius: 4px; margin-top: 15px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Maintenance Reminder</h1>
-          </div>
-          <div class="content">
-            <p>Hi ${userName},</p>
-            <p>This is a friendly reminder that you have the following maintenance items due soon:</p>
-            
-            <table>
-              <thead>
-                <tr>
-                  <th>Service</th>
-                  <th>Vehicle</th>
-                  <th>Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${maintenanceItems}
-              </tbody>
-            </table>
-            
-            <p>Keeping up with regular maintenance helps extend the life of your vehicle and prevents costly repairs down the road.</p>
-            
-            <div style="text-align: center;">
-              <a href="${supabaseUrl}" class="button">View Details</a>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Maintenance Reminder</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            table { width: 100%; border-collapse: collapse; }
+            th { text-align: left; padding: 10px; background-color: #eee; }
+            .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #666; }
+            .button { display: inline-block; background-color: #4F46E5; color: white; padding: 10px 20px; 
+                     text-decoration: none; border-radius: 4px; margin-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Maintenance Reminder</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${userName},</p>
+              <p>This is a friendly reminder that you have the following maintenance items due soon:</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Vehicle</th>
+                    <th>Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${maintenanceItems}
+                </tbody>
+              </table>
+              <p>Keeping up with regular maintenance helps extend the life of your vehicle and prevents costly repairs down the road.</p>
+              <div style="text-align: center;">
+                <a href="${supabaseUrl}" class="button">View Details</a>
+              </div>
+            </div>
+            <div class="footer">
+              <p>This is an automated reminder from your vehicle maintenance tracker.</p>
+              <p>You can adjust your notification settings in your profile preferences.</p>
             </div>
           </div>
-          <div class="footer">
-            <p>This is an automated reminder from your vehicle maintenance tracker.</p>
-            <p>You can adjust your notification settings in your profile preferences.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+        </body>
+        </html>
       `;
 
       try {
@@ -272,32 +286,36 @@ serve(async (req) => {
           await supabase.from("sent_reminders").insert(sentRemindersData);
         }
 
-      } catch (emailError: any) {
+      } catch (emailError: unknown) {
+        const errorMessage =
+          (emailError && typeof emailError === "object" && "message" in emailError)
+            ? (emailError as { message: string }).message
+            : "Failed to send email";
         console.error("Error sending email:", emailError);
-        throw new Error(`Failed to send email: ${emailError.message}`);
+        return new Response(
+          JSON.stringify({ error: `Failed to send email: ${errorMessage}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Reminders sent successfully" 
+      JSON.stringify({
+        success: true,
+        message: "Reminders sent successfully"
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage =
+      (error && typeof error === "object" && "message" in error)
+        ? (error as { message: string }).message
+        : "Unknown error";
     console.error("Error in send-maintenance-reminder function:", error);
-    
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

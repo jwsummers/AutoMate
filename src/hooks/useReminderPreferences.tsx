@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -16,62 +15,77 @@ export interface ReminderPreferences {
 }
 
 export function useReminderPreferences() {
-  const [preferences, setPreferences] = useState<ReminderPreferences | null>(null);
+  const [preferences, setPreferences] = useState<ReminderPreferences | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const fetchPreferences = async () => {
+  const fetchPreferences = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const { data, error } = await supabase
         .from('reminder_preferences')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
-      
+
       if (error) throw error;
-      
+
       if (data) {
         setPreferences(data as ReminderPreferences);
       }
-    } catch (error: any) {
-      console.error('Error fetching reminder preferences:', error);
-      setError(error.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Error fetching reminder preferences:', err);
+        setError(err.message);
+      } else {
+        console.error('Unknown error fetching preferences');
+        setError('An unknown error occurred.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const updatePreferences = async (updates: Partial<Omit<ReminderPreferences, 'id' | 'user_id' | 'created_at' | 'updated_at'>>) => {
+  const updatePreferences = async (
+    updates: Partial<
+      Omit<ReminderPreferences, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+    >
+  ) => {
     if (!user) return false;
-    
+
     try {
       setLoading(true);
-      
+
       const preferenceData = {
         user_id: user.id,
-        ...updates
+        ...updates,
       };
-      
+
       const { error } = await supabase
         .from('reminder_preferences')
         .upsert(preferenceData)
         .select();
-      
+
       if (error) throw error;
-      
-      setPreferences(prev => prev ? { ...prev, ...updates } : null);
+
+      setPreferences((prev) => (prev ? { ...prev, ...updates } : null));
       toast.success('Reminder preferences updated successfully');
-      
+
       return true;
-    } catch (error: any) {
-      console.error('Error updating reminder preferences:', error);
-      toast.error('Failed to update reminder preferences');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Error updating reminder preferences:', err);
+        toast.error('Failed to update reminder preferences');
+      } else {
+        toast.error('Unknown error updating preferences');
+      }
       return false;
     } finally {
       setLoading(false);
@@ -80,21 +94,28 @@ export function useReminderPreferences() {
 
   const sendTestReminder = async () => {
     if (!user) return false;
-    
+
     try {
       setLoading(true);
-      
-      const { error } = await supabase.functions.invoke('send-maintenance-reminder', {
-        body: { userId: user.id, forceEmail: true },
-      });
-      
+
+      const { error } = await supabase.functions.invoke(
+        'send-maintenance-reminder',
+        {
+          body: { userId: user.id, forceEmail: true },
+        }
+      );
+
       if (error) throw error;
-      
+
       toast.success('Test reminder sent successfully');
       return true;
-    } catch (error: any) {
-      console.error('Error sending test reminder:', error);
-      toast.error('Failed to send test reminder');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Error sending test reminder:', err);
+        toast.error('Failed to send test reminder');
+      } else {
+        toast.error('Unknown error sending reminder');
+      }
       return false;
     } finally {
       setLoading(false);
@@ -108,7 +129,7 @@ export function useReminderPreferences() {
       setPreferences(null);
       setLoading(false);
     }
-  }, [user]);
+  }, [user, fetchPreferences]);
 
   return {
     preferences,
@@ -116,6 +137,6 @@ export function useReminderPreferences() {
     error,
     fetchPreferences,
     updatePreferences,
-    sendTestReminder
+    sendTestReminder,
   };
 }
