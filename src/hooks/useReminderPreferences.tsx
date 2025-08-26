@@ -14,6 +14,9 @@ export interface ReminderPreferences {
   updated_at: string;
 }
 
+const PREF_COLUMNS =
+  'id, user_id, email_reminders, push_reminders, reminder_days_before, last_reminded_at, created_at, updated_at';
+
 export function useReminderPreferences() {
   const [preferences, setPreferences] = useState<ReminderPreferences | null>(
     null
@@ -31,15 +34,12 @@ export function useReminderPreferences() {
 
       const { data, error } = await supabase
         .from('reminder_preferences')
-        .select('*')
+        .select(PREF_COLUMNS)
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) throw error;
-
-      if (data) {
-        setPreferences(data as ReminderPreferences);
-      }
+      if (data) setPreferences(data as ReminderPreferences);
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.error('Error fetching reminder preferences:', err);
@@ -68,16 +68,16 @@ export function useReminderPreferences() {
         ...updates,
       };
 
+      // No need to .select(); let RLS return nothing and refresh via fetchPreferences()
       const { error } = await supabase
         .from('reminder_preferences')
-        .upsert(preferenceData)
-        .select();
+        .upsert(preferenceData, { onConflict: 'user_id' });
 
       if (error) throw error;
 
-      setPreferences((prev) => (prev ? { ...prev, ...updates } : null));
       toast.success('Reminder preferences updated successfully');
-
+      // Refresh from source of truth
+      await fetchPreferences();
       return true;
     } catch (err: unknown) {
       if (err instanceof Error) {

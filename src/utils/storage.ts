@@ -1,59 +1,153 @@
-
+// src/utils/storage.ts
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
-const VEHICLE_IMAGES_BUCKET = 'vehicle-images';
+const VEHICLE_BUCKET = 'vehicle-images';
 
-export async function uploadVehicleImage(file: File, userId: string, vehicleId: string): Promise<string | null> {
+// Enable verbose logs with ?debugMedia=1
+const DEBUG_MEDIA =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('debugMedia') === '1';
+
+const dlog = (...args: unknown[]) => {
+  if (DEBUG_MEDIA) console.log('[media]', ...args);
+};
+
+/** What we care about from Storage list() */
+interface ListedObject {
+  name: string;
+  id?: string;
+  updated_at?: string;
+  created_at?: string;
+  last_accessed_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Prefer a signed URL (private bucket); fallback to public URL (public bucket) */
+async function toUrl(path: string): Promise<string | null> {
+  const bucket = supabase.storage.from(VEHICLE_BUCKET);
+
+  const { data: signed, error: sErr } = await bucket.createSignedUrl(path, 60 * 60);
+  if (!sErr && signed?.signedUrl) return signed.signedUrl;
+
+  if (sErr && DEBUG_MEDIA) dlog('toUrl:signed-error', sErr);
+  const { data: pub } = bucket.getPublicUrl(path);
+  return pub.publicUrl || null;
+}
+
+/**
+ * Upload a vehicle image to:
+ *   vehicle-images/<user_id>/<vehicle_id>/vehicle-<timestamp>.<ext>
+ * Returns { path, url } where url is signed (if private) or public URL.
+ */
+export async function uploadVehicleImage(
+  file: File,
+  userId: string,
+  vehicleId: string
+): Promise<{ path: string; url: string } | null> {
   try {
-    // Create a unique file path
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${vehicleId}/${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const fileName = `vehicle-${Date.now()}.${ext}`;
+    const objectPath = `${userId}/${vehicleId}/${fileName}`;
 
-    // Check if bucket exists, if not, this will be handled by RLS policies
-    const { error: uploadError } = await supabase.storage
-      .from(VEHICLE_IMAGES_BUCKET)
-      .upload(filePath, file);
+    dlog('uploadVehicleImage:put', { bucket: VEHICLE_BUCKET, objectPath });
 
-    if (uploadError) {
-      throw uploadError;
+    const { error: uploadErr } = await supabase
+      .storage
+      .from(VEHICLE_BUCKET)
+      .upload(objectPath, file, {
+        upsert: false,
+        cacheControl: '3600',
+        contentType: file.type || 'image/jpeg',
+      });
+
+    if (uploadErr) {
+      dlog('uploadVehicleImage:error', uploadErr);
+      throw uploadErr;
     }
 
-    // Get public URL
-    const { data } = supabase.storage
-      .from(VEHICLE_IMAGES_BUCKET)
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
-  } catch (error: any) {
-    console.error('Error uploading image:', error);
-    toast.error('Failed to upload image');
+    const url = await toUrl(objectPath);
+    dlog('uploadVehicleImage:done', { objectPath, urlPreview: url?.slice(0, 100) + '…' });
+    return url ? { path: objectPath, url } : { path: objectPath, url: '' };
+  } catch (e) {
+    dlog('uploadVehicleImage:exception', e);
     return null;
   }
 }
 
-export async function deleteVehicleImage(imagePath: string): Promise<boolean> {
-  try {
-    // Extract the path from the URL
-    const url = new URL(imagePath);
-    const pathWithBucket = url.pathname;
-    // Remove the /storage/v1/object/public/ prefix and the bucket name
-    const pathParts = pathWithBucket.split('/');
-    const filePath = pathParts.slice(5).join('/'); // Adjust this index based on your URL structure
+/**
+ * Find the latest image for a vehicle by listing the folder
+ *   vehicle-images/<user_id>/<vehicle_id>/
+ */
+export async function getVehicleImageUrl(
+  userId: string,
+  vehicleId: string
+): Promise<string | null> {
+  const prefix = `${userId}/${vehicleId}`;
 
-    const { error } = await supabase.storage
-      .from(VEHICLE_IMAGES_BUCKET)
-      .remove([filePath]);
+  dlog('getVehicleImageUrl:list', { bucket: VEHICLE_BUCKET, prefix });
 
-    if (error) {
-      throw error;
-    }
+  // list() is non-recursive; we upload directly into this folder, so this is sufficient.
+  const { data: files, error } = await supabase.storage.from(VEHICLE_BUCKET).list(prefix, {
+    limit: 100,
+    sortBy: { column: 'updated_at', order: 'desc' }, // safest available sort
+  });
 
-    return true;
-  } catch (error: any) {
-    console.error('Error deleting image:', error);
-    toast.error('Failed to delete image');
-    return false;
+  if (error) {
+    dlog('getVehicleImageUrl:list-error', error);
+    return null;
   }
+
+  if (!files || files.length === 0) {
+    dlog('getVehicleImageUrl:no-files');
+    return null;
+  }
+
+  // Prefer common image extensions and newest first (as listed)
+  const isImage = (n: string) => /\.(png|jpe?g|webp|gif|heic|bmp)$/i.test(n);
+  const firstImage = (files as ListedObject[]).find((f) => isImage(f.name)) || files[0];
+
+  const fullPath = `${prefix}/${firstImage.name}`;
+  dlog('getVehicleImageUrl:hit', fullPath);
+
+  return toUrl(fullPath);
+}
+
+/**
+ * Delete ALL images under:
+ *   vehicle-images/<user_id>/<vehicle_id>/...
+ * Returns the number of files removed.
+ */
+export async function deleteVehicleImage(
+  userId: string,
+  vehicleId: string
+): Promise<number> {
+  const prefix = `${userId}/${vehicleId}`;
+  dlog('deleteVehicleImage:list', { prefix });
+
+  const { data: files, error } = await supabase.storage.from(VEHICLE_BUCKET).list(prefix, {
+    limit: 1000,
+    sortBy: { column: 'name', order: 'asc' },
+  });
+
+  if (error) {
+    dlog('deleteVehicleImage:list-error', error);
+    return 0;
+  }
+
+  if (!files || files.length === 0) {
+    dlog('deleteVehicleImage:nothing-to-delete');
+    return 0;
+  }
+
+  const paths = (files as ListedObject[]).map((f) => `${prefix}/${f.name}`);
+  dlog('deleteVehicleImage:remove', { count: paths.length });
+
+  const { error: removeErr } = await supabase.storage.from(VEHICLE_BUCKET).remove(paths);
+  if (removeErr) {
+    dlog('deleteVehicleImage:remove-error', removeErr);
+    throw removeErr;
+  }
+
+  dlog('deleteVehicleImage:done', { removed: paths.length });
+  return paths.length;
 }

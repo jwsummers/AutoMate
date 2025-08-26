@@ -11,6 +11,8 @@ export interface Profile {
   updated_at: string;
 }
 
+const PROFILE_COLS = 'id, full_name, avatar_url, created_at, updated_at';
+
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,23 +28,23 @@ export function useProfile() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_COLS)
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error && (error as { code?: string }).code !== 'PGRST116') {
         throw error;
       }
 
-      setProfile(data);
+      setProfile((data as Profile) ?? null);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error('Error fetching profile:', err);
-        setError(err.message);
-        toast.error('Failed to load profile data');
-      } else {
-        toast.error('Unknown error fetching profile');
-      }
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Failed to load profile data';
+      console.error('Error fetching profile:', err);
+      setError(msg);
+      toast.error('Failed to load profile data');
     } finally {
       setLoading(false);
     }
@@ -54,23 +56,25 @@ export function useProfile() {
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select(PROFILE_COLS)
+        .single();
 
       if (error) throw error;
 
-      setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+      setProfile(data as Profile);
       toast.success('Profile updated successfully');
       return true;
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error('Error updating profile:', err);
-        toast.error('Failed to update profile');
-      } else {
-        toast.error('Unknown error updating profile');
-      }
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Failed to update profile';
+      console.error('Error updating profile:', err);
+      toast.error('Failed to update profile');
       return false;
     } finally {
       setLoading(false);
@@ -83,31 +87,36 @@ export function useProfile() {
     try {
       setLoading(true);
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Math.random()
-        .toString(36)
-        .substring(2)}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const fileName = `avatar-${Date.now()}.${fileExt}`;
+      // path must start with the user folder to pass RLS policies
+      const objectPath = `${user.id}/${fileName}`; // no leading "avatars/" here
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(objectPath, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type || 'image/jpeg',
+        });
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      // If bucket is public: use getPublicUrl; if private, use signed URL approach
+      const { data: pub } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(objectPath);
+      const avatarUrl = pub.publicUrl;
 
-      const avatarUrl = data.publicUrl;
       await updateProfile({ avatar_url: avatarUrl });
-
       return avatarUrl;
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error('Error uploading avatar:', err);
-        toast.error('Failed to upload avatar');
-      } else {
-        toast.error('Unknown error uploading avatar');
-      }
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Failed to upload avatar';
+      console.error('Error uploading avatar:', err);
+      toast.error('Failed to upload avatar');
       return null;
     } finally {
       setLoading(false);

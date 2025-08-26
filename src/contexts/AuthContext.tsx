@@ -3,12 +3,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Session, User } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { safeInvoke } from '@/utils/safeInvoke';
 
 interface SubscriptionData {
   subscribed: boolean;
@@ -38,6 +40,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ⛔ Kill-switch for local dev: put VITE_SKIP_SUBSCRIPTION=1 in .env.local to skip hitting the Edge Function
+const SKIP_SUB_CHECK = import.meta.env?.VITE_SKIP_SUBSCRIPTION === '1';
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -45,32 +50,48 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isPro, setIsPro] = useState(false);
   const [subscriptionData, setSubscriptionData] =
     useState<SubscriptionData | null>(null);
+
+  const checkingRef = useRef(false); // single-flight guard
+  const lastCheckRef = useRef(0); // throttle timestamp (ms)
   const navigate = useNavigate();
 
   const checkSubscription = useCallback(async () => {
+    if (!user?.id) return;
+
+    if (SKIP_SUB_CHECK) {
+      console.warn('checkSubscription skipped (VITE_SKIP_SUBSCRIPTION=1)');
+      return;
+    }
+
+    // throttle to once every 30s regardless of success/failure
+    const now = Date.now();
+    if (now - lastCheckRef.current < 30_000) {
+      return;
+    }
+    if (checkingRef.current) {
+      return;
+    }
+
+    checkingRef.current = true;
+    lastCheckRef.current = now;
+
     try {
-      if (!user) return;
-
-      const { data, error } = await supabase.functions.invoke(
-        'check-subscription'
-      );
-
-      if (error) {
-        console.error('Error checking subscription:', error);
-        return;
-      }
+      const data = await safeInvoke<SubscriptionData>({
+        fn: 'check-subscription',
+        timeoutMs: 10_000,
+      });
 
       setSubscriptionData(data);
-      setIsPro(data.ai_access);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error('Failed to check subscription:', error.message);
-      } else {
-        console.error('Failed to check subscription: Unknown error');
-      }
+      setIsPro(Boolean(data?.ai_access));
+    } catch (err) {
+      // keep UI usable; log for visibility
+      console.error('Error checking subscription:', err);
+    } finally {
+      checkingRef.current = false;
     }
-  }, [user]);
+  }, [user?.id]);
 
+  // Subscribe to auth state ONCE; do not call checkSubscription here.
   useEffect(() => {
     const {
       data: { subscription },
@@ -79,37 +100,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(currentSession?.user ?? null);
 
       if (event === 'SIGNED_IN') {
-        setTimeout(() => {
-          toast.success('Signed in successfully');
-          checkSubscription();
-        }, 0);
+        toast.success('Signed in successfully');
       } else if (event === 'SIGNED_OUT') {
-        setTimeout(() => {
-          toast.info('Signed out');
-          setIsPro(false);
-          setSubscriptionData(null);
-          navigate('/');
-        }, 0);
+        toast.info('Signed out');
+        setIsPro(false);
+        setSubscriptionData(null);
+        navigate('/');
       }
     });
 
+    // Initialize from current session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-
-      if (currentSession?.user) {
-        setTimeout(() => {
-          checkSubscription();
-        }, 0);
-      }
-
       setIsLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate, checkSubscription]);
+  }, [navigate]);
+
+  // Only call checkSubscription when we actually have a user (and when user changes)
+  useEffect(() => {
+    if (user?.id) {
+      checkSubscription();
+    } else {
+      setIsPro(false);
+      setSubscriptionData(null);
+    }
+  }, [user?.id, checkSubscription]);
 
   const signUp = async (
     email: string,
@@ -121,11 +141,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: userData,
-        },
+        options: { data: userData },
       });
-
       if (error) throw error;
 
       toast.success(
@@ -133,12 +150,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       );
       navigate('/login');
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(error.message || 'An error occurred during sign up');
-        console.error('Sign up error:', error);
-      } else {
-        toast.error('An unknown error occurred during sign up');
-      }
+      const msg =
+        error && typeof error === 'object' && 'message' in error
+          ? (error as { message: string }).message
+          : 'An unknown error occurred during sign up';
+      toast.error(msg);
+      console.error('Sign up error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -151,17 +168,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email,
         password,
       });
-
       if (error) throw error;
-
       navigate('/dashboard');
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(error.message || 'Invalid login credentials');
-        console.error('Sign in error:', error);
-      } else {
-        toast.error('An unknown error occurred during sign in');
-      }
+      const msg =
+        error && typeof error === 'object' && 'message' in error
+          ? (error as { message: string }).message
+          : 'Invalid login credentials';
+      toast.error(msg);
+      console.error('Sign in error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -173,12 +188,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(error.message || 'Error signing out');
-        console.error('Sign out error:', error);
-      } else {
-        toast.error('An unknown error occurred during sign out');
-      }
+      const msg =
+        error && typeof error === 'object' && 'message' in error
+          ? (error as { message: string }).message
+          : 'Error signing out';
+      toast.error(msg);
+      console.error('Sign out error:', error);
     } finally {
       setIsLoading(false);
     }
