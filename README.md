@@ -1,4 +1,4 @@
-# AutoMate 🚗🔧
+# [AutoMate](https://automatenance.vercel.app/) 🚗🔧
 
 **AI-Powered Vehicle Maintenance Tracker**
 
