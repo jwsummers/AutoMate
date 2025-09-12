@@ -220,19 +220,43 @@ const Dashboard = () => {
     (task) => task.status === 'upcoming'
   ).length;
 
-  const handleAddVehicle = () => {
+  // Dashboard.tsx – before opening "Add Vehicle"
+  const { subscriptionData } = useAuth();
+  const handleAddVehicle = async () => {
     if (isDemoMode) {
       toast.info('Feature disabled in demo mode');
       return;
     }
+    const limit = subscriptionData?.vehicles_limit ?? 1;
+    if (limit >= 0 && displayVehicles.length >= limit) {
+      toast.error('You’ve reached your vehicle limit for this plan.');
+      return;
+    }
     setIsAddVehicleOpen(true);
   };
+
+  // --- Maintenance capacity (soft) ---
+  const maintLimit = subscriptionData?.maintenance_limit ?? 25; // default for free tier
+  const maintCount = maintenanceRecords?.length ?? 0;
+  const canAddMaintenance = maintLimit < 0 || maintCount < maintLimit; // negative => unlimited
+  const remainingMaint =
+    maintLimit < 0 ? Infinity : Math.max(maintLimit - maintCount, 0);
 
   const handleAddMaintenance = () => {
     if (isDemoMode) {
       toast.info('Feature disabled in demo mode');
       return;
     }
+
+    if (!canAddMaintenance) {
+      const msg =
+        maintLimit === 1
+          ? 'You’ve reached your plan limit of 1 maintenance log.'
+          : `You’ve reached your plan limit of ${maintLimit} maintenance logs.`;
+      toast.error(`${msg} Visit Pricing to upgrade for more.`);
+      return;
+    }
+
     setIsAddMaintenanceOpen(true);
   };
 
@@ -685,9 +709,21 @@ const Dashboard = () => {
                         size='sm'
                         className='gap-1 border-white/10 hover:bg-white/5'
                         onClick={handleAddMaintenance}
+                        disabled={!canAddMaintenance}
+                        title={
+                          !canAddMaintenance
+                            ? `Limit reached${
+                                Number.isFinite(maintLimit)
+                                  ? ` (${maintLimit})`
+                                  : ''
+                              }`
+                            : undefined
+                        }
                       >
                         <CalendarPlus className='h-4 w-4' />
-                        <span>Add</span>
+                        <span>
+                          {canAddMaintenance ? 'Add' : 'Limit reached'}
+                        </span>
                       </Button>
                     </div>
 
@@ -708,9 +744,21 @@ const Dashboard = () => {
                               variant='outline'
                               className='border-white/10 hover:bg-white/5'
                               onClick={handleAddMaintenance}
+                              disabled={!canAddMaintenance}
+                              title={
+                                !canAddMaintenance
+                                  ? `Limit reached${
+                                      Number.isFinite(maintLimit)
+                                        ? ` (${maintLimit})`
+                                        : ''
+                                    }`
+                                  : undefined
+                              }
                             >
                               <CalendarPlus className='h-4 w-4 mr-2' />
-                              Schedule Service
+                              {canAddMaintenance
+                                ? 'Schedule Service'
+                                : 'Limit reached'}
                             </Button>
                           </CardContent>
                         </Card>
@@ -841,9 +889,21 @@ const Dashboard = () => {
                       size='sm'
                       className='gap-1 border-white/10 hover:bg-white/5'
                       onClick={handleAddMaintenance}
+                      disabled={!canAddMaintenance}
+                      title={
+                        !canAddMaintenance
+                          ? `Limit reached${
+                              Number.isFinite(maintLimit)
+                                ? ` (${maintLimit})`
+                                : ''
+                            }`
+                          : undefined
+                      }
                     >
                       <CalendarPlus className='h-4 w-4' />
-                      <span>Add Service</span>
+                      <span>
+                        {canAddMaintenance ? 'Add Service' : 'Limit reached'}
+                      </span>
                     </Button>
                   </div>
 
@@ -920,9 +980,23 @@ const Dashboard = () => {
                         size='sm'
                         className='gap-1 border-white/10 hover:bg-white/5'
                         onClick={handleAddMaintenance}
+                        disabled={!canAddMaintenance}
+                        title={
+                          !canAddMaintenance
+                            ? `Limit reached${
+                                Number.isFinite(maintLimit)
+                                  ? ` (${maintLimit})`
+                                  : ''
+                              }`
+                            : undefined
+                        }
                       >
                         <CalendarPlus className='h-4 w-4' />
-                        <span>Add Maintenance</span>
+                        <span>
+                          {canAddMaintenance
+                            ? 'Add Maintenance'
+                            : 'Limit reached'}
+                        </span>
                       </Button>
                     </div>
 

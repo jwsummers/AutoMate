@@ -125,7 +125,7 @@ async function hydrateVehicleImages(rows: VehicleMaybeWithImage[]) {
 }
 
 export function useVehicles() {
-  const { user } = useAuth();
+  const { user, subscriptionData } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +168,27 @@ export function useVehicles() {
       try {
         setLoading(true);
 
+        // ---- Soft limit gate (client-side) ----
+        // Negative limit means "unlimited". Default Free = 1 if not loaded.
+        const limit = subscriptionData?.vehicles_limit ?? 1;
+        if (limit >= 0) {
+          const { count, error: countErr } = await supabase
+            .from('vehicles')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+
+          if (countErr) throw countErr;
+          if ((count ?? 0) >= limit) {
+            toast.error(
+              limit === 1
+                ? 'Free plan limit reached: 1 vehicle.'
+                : `Plan limit reached: ${limit} vehicles.`
+            );
+            return null;
+          }
+        }
+        // ---------------------------------------
+
         const payload = { ...toInsert, user_id: user.id };
         const { data, error } = await supabase
           .from('vehicles')
@@ -190,13 +211,13 @@ export function useVehicles() {
             ? (err as { message: string }).message
             : 'Failed to add vehicle';
         console.error('Error adding vehicle:', err);
-        toast.error('Failed to add vehicle');
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
       }
     },
-    [user]
+    [user, subscriptionData]
   );
 
   const updateVehicle = useCallback(

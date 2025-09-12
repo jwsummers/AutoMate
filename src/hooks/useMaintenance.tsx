@@ -35,7 +35,7 @@ export function useMaintenance() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, subscriptionData } = useAuth();
 
   const determineStatus = (record: MaintenanceRecord): MaintenanceStatus => {
     if (record.notes && record.notes.includes('COMPLETED:')) {
@@ -56,7 +56,7 @@ export function useMaintenance() {
       const { data, error } = await supabase
         .from('maintenance_records')
         .select(MAINT_COLUMNS)
-        .eq('user_id', user.id) // keep payload scoped even if RLS already enforces it
+        .eq('user_id', user.id) // scope to current user even though RLS should enforce this
         .order('date', { ascending: false })
         .limit(LIST_LIMIT);
 
@@ -90,6 +90,27 @@ export function useMaintenance() {
       try {
         setLoading(true);
 
+        // ---- Soft limit gate (client-side) ----
+        // Negative => unlimited. Default to 25 if not yet loaded.
+        const limit = subscriptionData?.maintenance_limit ?? 25;
+        if (limit >= 0) {
+          const { count, error: countErr } = await supabase
+            .from('maintenance_records')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+
+          if (countErr) throw countErr;
+          if ((count ?? 0) >= limit) {
+            toast.error(
+              limit === 1
+                ? 'Plan limit reached: 1 maintenance log.'
+                : `Plan limit reached: ${limit} maintenance logs.`
+            );
+            return null;
+          }
+        }
+        // ---------------------------------------
+
         const recordWithUserId = {
           ...newRecord,
           user_id: user.id,
@@ -119,13 +140,13 @@ export function useMaintenance() {
             ? (err as { message: string }).message
             : 'Failed to add maintenance record';
         console.error('Error adding maintenance record:', err);
-        toast.error('Failed to add maintenance record');
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
       }
     },
-    [user]
+    [user, subscriptionData]
   );
 
   const updateMaintenanceRecord = useCallback(
@@ -212,7 +233,7 @@ export function useMaintenance() {
       if (!user) return false;
 
       try {
-        // Light fetch to read existing notes (no * payload)
+        // Light fetch to read existing notes only
         const { data: existing, error: fetchError } = await supabase
           .from('maintenance_records')
           .select('id, notes')

@@ -48,7 +48,7 @@ const Navbar = () => {
         <Link to='/' className='flex items-center gap-1'>
           <div className='relative'>
             <img
-              src='/Logo.png'
+              src='/Logo-automate-rb.png'
               alt='AutoMate Logo'
               height={80}
               width={80}

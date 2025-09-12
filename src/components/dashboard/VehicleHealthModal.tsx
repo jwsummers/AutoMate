@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Car, Wrench, AlertTriangle, Gauge, BarChart2 } from 'lucide-react';
+import { Wrench, AlertTriangle, Gauge, Clock, CheckCircle } from 'lucide-react';
 import { Vehicle } from '@/hooks/useVehicles';
 import { MaintenanceWithStatus } from '@/hooks/useMaintenance';
 import {
@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer } from '@/components/ui/chart';
 
 interface VehicleHealthModalProps {
   isOpen: boolean;
@@ -31,9 +31,107 @@ interface VehicleHealthModalProps {
 
 interface HealthMetric {
   name: string;
-  value: number;
+  value: number; // 0..100
   color: string;
 }
+
+/* ----------------------- Helpers & Scoring ----------------------- */
+
+function clamp(n: number, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function parseISODate(d: string | Date | null | undefined): Date | null {
+  if (!d) return null;
+  try {
+    return d instanceof Date ? d : new Date(d);
+  } catch {
+    return null;
+  }
+}
+
+function daysBetween(a: Date, b: Date) {
+  const ms = Math.abs(a.getTime() - b.getTime());
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+type ScoreParts = {
+  overduePenalty: number; // max 45
+  upcomingPenalty: number; // max 10
+  sinceServicePenalty: number; // 0/5/10/15
+  agePenalty: number; // 0/5/10
+};
+
+type HealthCalc = {
+  score: number; // 0..100
+  parts: ScoreParts;
+  overdueCount: number;
+  upcomingCount: number;
+  lastCompletedDate: Date | null;
+};
+
+/**
+ * Deterministic health score:
+ *   Start 100
+ *   - Overdue:   15 each, capped 45
+ *   - Upcoming:  5 each,  capped 10
+ *   - Recency:   >365d => 15, >180d => 10, >90d => 5, else 0; no completions => 5
+ *   - Age:       >=15y => 10, >=10y => 5, else 0
+ */
+function computeHealth(
+  vehicleYear: number | undefined,
+  vehicleRecords: MaintenanceWithStatus[],
+  today = new Date()
+): HealthCalc {
+  const overdueCount = vehicleRecords.filter(
+    (r) => r.status === 'overdue'
+  ).length;
+  const upcomingCount = vehicleRecords.filter(
+    (r) => r.status === 'upcoming'
+  ).length;
+
+  const overduePenalty = Math.min(45, overdueCount * 15);
+  const upcomingPenalty = Math.min(10, upcomingCount * 5);
+
+  const completedDates = vehicleRecords
+    .filter((r) => r.status === 'completed')
+    .map((r) => parseISODate(r.date))
+    .filter((d): d is Date => !!d)
+    .sort((a, b) => b.getTime() - a.getTime());
+  const lastCompletedDate = completedDates[0] ?? null;
+
+  let sinceServicePenalty = 0;
+  if (lastCompletedDate) {
+    const days = daysBetween(today, lastCompletedDate);
+    if (days > 365) sinceServicePenalty = 15;
+    else if (days > 180) sinceServicePenalty = 10;
+    else if (days > 90) sinceServicePenalty = 5;
+  } else {
+    // encourage logging at least one completion
+    sinceServicePenalty = 5;
+  }
+
+  let agePenalty = 0;
+  if (typeof vehicleYear === 'number' && vehicleYear > 0) {
+    const age = today.getFullYear() - vehicleYear;
+    if (age >= 15) agePenalty = 10;
+    else if (age >= 10) agePenalty = 5;
+  }
+
+  const score = clamp(
+    100 - overduePenalty - upcomingPenalty - sinceServicePenalty - agePenalty
+  );
+
+  return {
+    score,
+    parts: { overduePenalty, upcomingPenalty, sinceServicePenalty, agePenalty },
+    overdueCount,
+    upcomingCount,
+    lastCompletedDate,
+  };
+}
+
+/* ----------------------- Component ----------------------- */
 
 const VehicleHealthModal = ({
   isOpen,
@@ -41,79 +139,116 @@ const VehicleHealthModal = ({
   vehicle,
   maintenanceRecords,
 }: VehicleHealthModalProps) => {
-  const [healthScore, setHealthScore] = useState(0);
+  const { score, parts, overdueCount, upcomingCount, lastCompletedDate } =
+    useMemo(() => {
+      if (!vehicle) {
+        return {
+          score: 0,
+          parts: {
+            overduePenalty: 0,
+            upcomingPenalty: 0,
+            sinceServicePenalty: 0,
+            agePenalty: 0,
+          },
+          overdueCount: 0,
+          upcomingCount: 0,
+          lastCompletedDate: null as Date | null,
+        };
+      }
+
+      const vehicleMaintenanceRecords = maintenanceRecords.filter(
+        (r) => r.vehicle_id === vehicle.id
+      );
+
+      return computeHealth(vehicle.year, vehicleMaintenanceRecords);
+    }, [vehicle, maintenanceRecords]);
+
   const [healthMetrics, setHealthMetrics] = useState<HealthMetric[]>([]);
 
   useEffect(() => {
     if (!vehicle) return;
 
-    // Calculate vehicle health metrics based on maintenance records
-    const vehicleMaintenanceRecords = maintenanceRecords.filter(
-      (record) => record.vehicle_id === vehicle.id
-    );
+    // Convert penalties to 0..100 "factors" (higher=better)
+    const overdueFactor = 100 - Math.round((parts.overduePenalty / 45) * 100);
+    const upcomingFactor = 100 - Math.round((parts.upcomingPenalty / 10) * 100);
+    const recencyFactor =
+      100 - Math.round((parts.sinceServicePenalty / 15) * 100);
+    const ageFactor = 100 - Math.round((parts.agePenalty / 10) * 100);
 
-    const completedCount = vehicleMaintenanceRecords.filter(
-      (record) => record.status === 'completed'
-    ).length;
-
-    const overdueCount = vehicleMaintenanceRecords.filter(
-      (record) => record.status === 'overdue'
-    ).length;
-
-    const upcomingCount = vehicleMaintenanceRecords.filter(
-      (record) => record.status === 'upcoming'
-    ).length;
-
-    // Calculate health score - this is a simplified model
-    // You could make this more sophisticated based on your requirements
-    const baseScore = 75;
-    const overdueImpact = overdueCount * -10;
-    const completedBonus = completedCount * 5;
-    const calculatedScore = Math.min(
-      100,
-      Math.max(0, baseScore + overdueImpact + completedBonus)
-    );
-
-    setHealthScore(calculatedScore);
-
-    // Create data for the chart
     setHealthMetrics([
+      { name: 'Overdue Impact', value: clamp(overdueFactor), color: '#ef4444' }, // red
       {
-        name: 'Regular Maintenance',
-        value: completedCount > 0 ? Math.min(100, completedCount * 20) : 40,
-        color: '#22c55e', // green-500
-      },
+        name: 'Upcoming Impact',
+        value: clamp(upcomingFactor),
+        color: '#f59e0b',
+      }, // amber
       {
-        name: 'Timely Service',
-        value: overdueCount === 0 ? 100 : Math.max(0, 100 - overdueCount * 25),
-        color: '#3b82f6', // blue-500
-      },
-      {
-        name: 'Service Planning',
-        value: upcomingCount > 0 ? 80 : 50,
-        color: '#8b5cf6', // violet-500
-      },
+        name: 'Service Recency',
+        value: clamp(recencyFactor),
+        color: '#3b82f6',
+      }, // blue
+      { name: 'Age Factor', value: clamp(ageFactor), color: '#8b5cf6' }, // violet
       {
         name: 'Overall Health',
-        value: calculatedScore,
-        color:
-          calculatedScore >= 80
-            ? '#22c55e'
-            : calculatedScore >= 50
-            ? '#eab308'
-            : '#ef4444', // Conditional color based on score
+        value: score,
+        color: score >= 80 ? '#22c55e' : score >= 50 ? '#eab308' : '#ef4444',
       },
     ]);
-  }, [vehicle, maintenanceRecords]);
+  }, [vehicle, parts, score]);
 
   if (!vehicle) return null;
+
+  const healthClass =
+    score >= 80
+      ? 'bg-green-500/20 text-green-500'
+      : score >= 50
+      ? 'bg-yellow-500/20 text-yellow-500'
+      : 'bg-red-500/20 text-red-500';
+
+  /* Recommendations */
+  const recs: Array<{ icon: JSX.Element; title: string; body: string }> = [];
+  if (overdueCount > 0) {
+    recs.push({
+      icon: <AlertTriangle className='w-4 h-4 text-yellow-500' />,
+      title: 'Resolve Overdue Tasks',
+      body: 'Your vehicle has overdue maintenance items that should be addressed promptly.',
+    });
+  }
+  if (!lastCompletedDate || daysBetween(new Date(), lastCompletedDate) > 180) {
+    recs.push({
+      icon: <Clock className='w-4 h-4 text-neon-blue' />,
+      title: 'Service Recency',
+      body: 'It has been a while since the last completed service. Consider scheduling routine maintenance.',
+    });
+  }
+  if (upcomingCount > 0) {
+    recs.push({
+      icon: <Wrench className='w-4 h-4 text-neon-blue' />,
+      title: 'Plan Upcoming Maintenance',
+      body: 'You have upcoming tasks. Planning them now helps avoid last-minute issues.',
+    });
+  }
+  if (vehicle.year && new Date().getFullYear() - vehicle.year >= 15) {
+    recs.push({
+      icon: <CheckCircle className='w-4 h-4 text-green-500' />,
+      title: 'Older Vehicle Care',
+      body: 'For vehicles 15+ years old, increase inspection frequency to catch wear early.',
+    });
+  }
+  if (recs.length === 0) {
+    recs.push({
+      icon: <CheckCircle className='w-4 h-4 text-green-500' />,
+      title: 'Looking Good',
+      body: 'No pressing issues detected based on maintenance history. Keep up with routine service!',
+    });
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className='sm:max-w-[650px] bg-dark-card border-white/10 text-foreground'>
         <DialogHeader>
           <DialogTitle className='text-xl'>
-            Vehicle Health Status: {vehicle.year} {vehicle.make} {vehicle.model}
+            Vehicle Health: {vehicle.year} {vehicle.make} {vehicle.model}
           </DialogTitle>
         </DialogHeader>
 
@@ -123,47 +258,38 @@ const VehicleHealthModal = ({
             <div>
               <h3 className='text-lg font-medium mb-1'>Health Score</h3>
               <p className='text-sm text-foreground/70'>
-                Based on maintenance history and service compliance
+                Based on overdue items, time since last service, age, and
+                upcoming tasks
               </p>
             </div>
             <div className='flex items-center gap-3'>
               <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  healthScore >= 80
-                    ? 'bg-green-500/20 text-green-500'
-                    : healthScore >= 50
-                    ? 'bg-yellow-500/20 text-yellow-500'
-                    : 'bg-red-500/20 text-red-500'
-                }`}
+                className={`w-16 h-16 rounded-full flex items-center justify-center ${healthClass}`}
               >
                 <Gauge className='w-8 h-8' />
               </div>
-              <div className='text-3xl font-bold'>{healthScore}%</div>
+              <div className='text-3xl font-bold'>{score}%</div>
             </div>
           </div>
 
           {/* Health Metrics Chart */}
           <Card className='bg-white/5 border-white/10'>
             <CardContent className='p-6'>
-              <h3 className='text-lg font-medium mb-4'>Health Metrics</h3>
+              <h3 className='text-lg font-medium mb-4'>Health Factors</h3>
               <div className='h-[300px] w-full'>
                 <ChartContainer
                   config={{
-                    regularMaintenance: { color: '#22c55e' },
-                    timelyService: { color: '#3b82f6' },
-                    servicePlanning: { color: '#8b5cf6' },
-                    overallHealth: { color: '#f59e0b' },
+                    overdueImpact: { color: '#ef4444' },
+                    upcomingImpact: { color: '#f59e0b' },
+                    serviceRecency: { color: '#3b82f6' },
+                    ageFactor: { color: '#8b5cf6' },
+                    overallHealth: { color: '#22c55e' },
                   }}
                 >
                   <ResponsiveContainer width='100%' height='100%'>
                     <BarChart
                       data={healthMetrics}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 20,
-                        bottom: 40,
-                      }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
                     >
                       <CartesianGrid
                         strokeDasharray='3 3'
@@ -198,46 +324,20 @@ const VehicleHealthModal = ({
           {/* Recommendations */}
           <div className='space-y-3'>
             <h3 className='text-lg font-medium'>Recommendations</h3>
-
-            {healthScore < 80 && (
-              <div className='flex items-start gap-3 p-3 bg-white/5 rounded-lg'>
-                <div className='min-w-8 h-8 rounded-full flex items-center justify-center bg-yellow-500/20'>
-                  <AlertTriangle className='w-4 h-4 text-yellow-500' />
+            {recs.map((r, idx) => (
+              <div
+                key={idx}
+                className='flex items-start gap-3 p-3 bg-white/5 rounded-lg'
+              >
+                <div className='min-w-8 h-8 rounded-full flex items-center justify-center bg-white/10'>
+                  {r.icon}
                 </div>
                 <div>
-                  <p className='font-medium'>Schedule Overdue Maintenance</p>
-                  <p className='text-sm text-foreground/70'>
-                    Your vehicle has overdue maintenance tasks that should be
-                    addressed soon.
-                  </p>
+                  <p className='font-medium'>{r.title}</p>
+                  <p className='text-sm text-foreground/70'>{r.body}</p>
                 </div>
               </div>
-            )}
-
-            <div className='flex items-start gap-3 p-3 bg-white/5 rounded-lg'>
-              <div className='min-w-8 h-8 rounded-full flex items-center justify-center bg-neon-blue/20'>
-                <Wrench className='w-4 h-4 text-neon-blue' />
-              </div>
-              <div>
-                <p className='font-medium'>Regular Maintenance</p>
-                <p className='text-sm text-foreground/70'>
-                  Continue with scheduled maintenance to maintain optimal
-                  vehicle health.
-                </p>
-              </div>
-            </div>
-
-            <div className='flex items-start gap-3 p-3 bg-white/5 rounded-lg'>
-              <div className='min-w-8 h-8 rounded-full flex items-center justify-center bg-green-500/20'>
-                <BarChart2 className='w-4 h-4 text-green-500' />
-              </div>
-              <div>
-                <p className='font-medium'>Track Performance</p>
-                <p className='text-sm text-foreground/70'>
-                  Monitor fuel efficiency and performance to catch issues early.
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
 
           <Button onClick={onClose} className='w-full'>
@@ -262,16 +362,19 @@ const CustomTooltip = ({
   if (active && payload && payload.length) {
     return (
       <div className='bg-dark-card border border-white/10 p-3 rounded-lg shadow-xl'>
-        <p className='font-medium'>{payload[0].payload.name}</p>
-        <p className='text-lg'>{`${payload[0].value}%`}</p>
+        <p className='font-medium'>
+          {(payload[0].payload as HealthMetric).name}
+        </p>
+        <p className='text-lg'>{`${payload[0].value as number}%`}</p>
         <div
           className='w-full h-1 mt-1 rounded-full'
-          style={{ backgroundColor: payload[0].payload.color }}
+          style={{
+            backgroundColor: (payload[0].payload as HealthMetric).color,
+          }}
         />
       </div>
     );
   }
-
   return null;
 };
 
