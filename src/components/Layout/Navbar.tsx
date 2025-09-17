@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Car, User, LogIn, LogOut } from 'lucide-react';
+import { Menu, X, User, LogIn, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Navbar = () => {
@@ -11,19 +11,30 @@ const Navbar = () => {
   const { user, signOut } = useAuth();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const closeMobileMenu = () => {
-    setIsMobileMenuOpen(false);
-  };
+  // Lock body scroll while the mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
 
-  // Dynamic navigation links based on authentication status
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMobileMenuOpen(false);
+    };
+    if (isMobileMenuOpen) window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMobileMenuOpen]);
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
   const navLinks = user
     ? [
         { name: 'Dashboard', path: '/dashboard' },
@@ -117,11 +128,13 @@ const Navbar = () => {
           </div>
         </nav>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Toggle (kept above the panel) */}
         <button
-          className='block md:hidden'
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label='Menu'
+          className='block md:hidden relative z-[60]'
+          onClick={() => setIsMobileMenuOpen((o) => !o)}
+          aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={isMobileMenuOpen}
+          aria-controls='mobile-nav'
         >
           {isMobileMenuOpen ? (
             <X className='w-6 h-6 text-foreground' />
@@ -131,13 +144,14 @@ const Navbar = () => {
         </button>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation Panel (no extra close button inside) */}
       <div
-        className={`fixed inset-0 bg-dark-bg z-40 transform transition-transform duration-300 pt-20 ${
+        id='mobile-nav'
+        className={`fixed inset-0 bg-dark-bg/95 backdrop-blur-sm z-40 transform transition-transform duration-300 ${
           isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <nav className='container mx-auto px-4'>
+        <nav className='container mx-auto px-4 pt-20'>
           <ul className='flex flex-col gap-4'>
             {navLinks.map((link) => (
               <li key={link.name}>
@@ -154,6 +168,7 @@ const Navbar = () => {
                 </Link>
               </li>
             ))}
+
             <li className='pt-4 mt-4 border-t border-white/10'>
               {user ? (
                 <button
