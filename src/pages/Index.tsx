@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Layout/Navbar';
 import Footer from '@/components/Layout/Footer';
+import { FeatureCarousel } from '@/components/common/FeatureCarousel';
 
 const Index = () => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -234,10 +235,33 @@ const Index = () => {
           <div className='flex flex-col lg:flex-row items-center gap-10 lg:gap-16'>
             <div className='lg:w-1/2 order-2 lg:order-1'>
               <div className='glass-card rounded-xl overflow-hidden border border-white/10 shadow-[0_20px_50px_-15px_rgba(0,243,255,0.15)]'>
-                <img
-                  src='/dashboard-preview.png'
-                  alt='AutoMate Dashboard Interface'
-                  className='w-full'
+                <FeatureCarousel
+                  slides={[
+                    {
+                      src: '/dashboard-preview.png',
+                      alt: 'AutoMate Dashboard Overview',
+                      caption:
+                        'Overview: vehicles, upcoming services, AI alerts',
+                    },
+                    {
+                      src: '/maintenance-schedule-preview.png',
+                      alt: 'Maintenance Schedule',
+                      caption:
+                        'Schedule & track upcoming and completed maintenance',
+                    },
+                    {
+                      src: '/ai-predictions-preview.png',
+                      alt: 'AI Predictions',
+                      caption: 'Smart predictions based on your history',
+                    },
+                    {
+                      src: '/vehicle-details-preview.png',
+                      alt: 'Vehicle Details',
+                      caption: 'Per-vehicle health and history at a glance',
+                    },
+                  ]}
+                  autoPlayMs={4500}
+                  className='h-[420px] bg-black'
                 />
               </div>
             </div>
