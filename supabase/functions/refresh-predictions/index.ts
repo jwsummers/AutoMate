@@ -107,6 +107,9 @@ serve(async (req) => {
     const user = userData.user;
 
     // Pro check
+    const proOverride =
+  !!(user.app_metadata && (user.app_metadata as Record<string, unknown>)["pro_override"]);
+
     const { data: sub } = await admin
       .from("subscriptions")
       .select("status, ai_predictions")
@@ -115,11 +118,13 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const isPro = !!(sub && sub.status === "active" && sub.ai_predictions);
-    if (!isPro) {
-      return new Response(JSON.stringify({ error: "Pro required" }), {
-        status: 403, headers: { ...cors(origin), "Content-Type": "application/json" },
-      });
+    const isPro = proOverride || !!(sub && sub.status === "active" && sub.ai_predictions);
+
+if (!isPro) {
+  return new Response(JSON.stringify({ error: "Pro required" }), {
+    status: 403,
+    headers: { ...cors(origin), "Content-Type": "application/json" },
+  });
     }
 
     // Per-day limiter via ai_cache
