@@ -1,15 +1,17 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-
-import {
-  useMaintenance,
-  MaintenanceRecord,
-  MaintenanceWithStatus,
-} from '@/hooks/useMaintenance';
+import Navbar from '@/components/Layout/Navbar';
+import Footer from '@/components/Layout/Footer';
 import { useVehicles, Vehicle } from '@/hooks/useVehicles';
+import {
+  useMaintenanceLogs,
+  MaintenanceLogWithItems,
+  MaintenanceItem as MaintItem,
+  MaintenanceStatus,
+  NewLogInput,
+} from '@/hooks/useMaintenanceLogs';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,204 +25,100 @@ import {
   ChevronLeft,
   Wrench,
   Car,
-  Calendar,
+  Calendar as CalendarIcon,
   DollarSign,
-  Clock,
+  FileText,
+  MapPin,
+  Receipt,
   Check,
   AlertTriangle,
+  Clock,
   Edit,
   Trash,
 } from 'lucide-react';
-import Navbar from '@/components/Layout/Navbar';
-import Footer from '@/components/Layout/Footer';
-import EditMaintenanceForm from '@/components/dashboard/EditMaintenanceForm';
+import EditMaintenanceLogForm from '@/components/dashboard/EditMaintenanceLogForm';
 
-const MaintenanceDetails = () => {
+function formatUSD(n: number) {
+  return `$${n.toFixed(2)}`;
+}
+
+function formatDate(d: string) {
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function aggregateStatus(items: MaintItem[]): MaintenanceStatus {
+  if (items.some((i) => i.status === 'overdue')) return 'overdue';
+  if (items.some((i) => i.status === 'upcoming')) return 'upcoming';
+  return 'completed';
+}
+
+export default function MaintenanceDetails() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
 
-  const {
-    maintenanceRecords,
-    loading: maintenanceLoading,
-    deleteMaintenanceRecord,
-    markMaintenanceAsCompleted,
-    updateMaintenanceRecord,
-  } = useMaintenance();
-
   const { vehicles, loading: vehiclesLoading } = useVehicles();
+  const {
+    logs,
+    loading: logsLoading,
+    fetchLogs,
+    updateLog,
+    deleteLog,
+  } = useMaintenanceLogs();
 
-  const [maintenance, setMaintenance] = useState<MaintenanceWithStatus | null>(
-    null
-  );
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [isCompletingStatus, setIsCompletingStatus] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // --- helpers ---
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+  useEffect(() => {
+    if (user) fetchLogs();
+  }, [user, fetchLogs]);
 
-  const getStatusIcon = () => {
-    if (!maintenance) return null;
-    switch (maintenance.status) {
-      case 'completed':
-        return <Check className='h-5 w-5 text-green-500' />;
-      case 'upcoming':
-        return <Clock className='h-5 w-5 text-neon-blue' />;
-      case 'overdue':
-        return <AlertTriangle className='h-5 w-5 text-red-500' />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusClass = () => {
-    if (!maintenance) return '';
-    switch (maintenance.status) {
-      case 'completed':
-        return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case 'upcoming':
-        return 'bg-neon-blue/10 text-neon-blue border-neon-blue/20';
-      case 'overdue':
-        return 'bg-red-500/10 text-red-500 border-red-500/20';
-      default:
-        return '';
-    }
-  };
-
-  const determineStatus = (
-    record: MaintenanceRecord
-  ): MaintenanceWithStatus['status'] => {
-    if (record.notes && record.notes.includes('COMPLETED:')) return 'completed';
-    const today = new Date();
-    const recordDate = new Date(record.date);
-    return recordDate < today ? 'overdue' : 'upcoming';
-  };
-
-  // Fallback: fetch one record directly by id if not found in memory
-  const fetchRecordById = useCallback(
-    async (recordId: string) => {
-      if (!user) return;
-
-      try {
-        const { data: rec, error: recErr } = await supabase
-          .from('maintenance_records')
-          .select(
-            'id, user_id, vehicle_id, type, description, date, mileage, cost, performed_by, notes, created_at, updated_at'
-          )
-          .eq('id', recordId)
-          .eq('user_id', user.id)
-          .single();
-
-        if (recErr || !rec) return;
-
-        const record = rec as MaintenanceRecord;
-        const withStatus: MaintenanceWithStatus = {
-          ...record,
-          status: determineStatus(record),
-        };
-        setMaintenance(withStatus);
-
-        // vehicle fetch for details tile
-        const { data: veh, error: vehErr } = await supabase
-          .from('vehicles')
-          .select(
-            'id, user_id, make, model, year, mileage, color, license_plate, vin, notes, created_at, updated_at'
-          )
-          .eq('id', record.vehicle_id)
-          .eq('user_id', user.id)
-          .single();
-
-        if (!vehErr && veh) {
-          // If your useVehicles hook hydrates image, this direct fetch won’t.
-          // That’s OK for this page (we show a placeholder if no image).
-          setVehicle(veh as Vehicle);
-        }
-      } catch (e) {
-        console.error('Fallback fetch error:', e);
-      }
-    },
-    [user]
+  const log: MaintenanceLogWithItems | undefined = useMemo(
+    () => logs.find((l) => l.id === id),
+    [logs, id]
   );
 
-  // Main effect: try in-memory first, then fallback
-  useEffect(() => {
-    if (!id) return;
+  const vehicle: Vehicle | undefined = useMemo(
+    () => (log ? vehicles.find((v) => v.id === log.vehicle_id) : undefined),
+    [vehicles, log]
+  );
 
-    // If hook data loaded, try to find the record in memory
-    if (!maintenanceLoading) {
-      const found = maintenanceRecords.find((m) => m.id === id) || null;
-      setMaintenance(found);
+  const status: MaintenanceStatus | null = log
+    ? aggregateStatus(log.items)
+    : null;
 
-      if (found && !vehiclesLoading) {
-        const v = vehicles.find((vv) => vv.id === found.vehicle_id) || null;
-        setVehicle(v);
-      }
+  const isLoading = logsLoading || vehiclesLoading;
 
-      // If not found after hooks finished loading, fallback to a direct DB fetch
-      if (!found && !vehiclesLoading) {
-        fetchRecordById(id);
-      }
-    }
-  }, [
-    id,
-    maintenanceLoading,
-    maintenanceRecords,
-    vehiclesLoading,
-    vehicles,
-    fetchRecordById,
-  ]);
-
-  // --- actions ---
-  const handleComplete = async () => {
-    if (!maintenance) return;
-    try {
-      setIsCompletingStatus(true);
-      await markMaintenanceAsCompleted(maintenance.id);
-      // optimistic local update
-      setMaintenance({ ...maintenance, status: 'completed' });
-    } finally {
-      setIsCompletingStatus(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!maintenance) return;
+  const handleDeleteLog = async () => {
+    if (!log) return;
     if (
       !window.confirm(
-        'Are you sure you want to delete this maintenance record? This action cannot be undone.'
+        'Are you sure you want to delete this maintenance log and all its items?'
       )
     )
       return;
-
-    const ok = await deleteMaintenanceRecord(maintenance.id);
+    const ok = await deleteLog(log.id);
     if (ok) {
+      toast.success('Maintenance log deleted');
       navigate('/dashboard?tab=maintenance');
     }
   };
 
-  const handleUpdateMaintenance = async (
-    maintenanceId: string,
-    updatedData: Partial<MaintenanceRecord>
+  const handleUpdateLog = async (
+    logId: string,
+    patch: Partial<NewLogInput>
   ) => {
-    const success = await updateMaintenanceRecord(maintenanceId, updatedData);
-    if (success) {
-      setIsEditModalOpen(false);
-      // local reflect; recompute status if date/notes changed
-      if (!maintenance) return success;
-      const merged: MaintenanceRecord = { ...maintenance, ...updatedData };
-      setMaintenance({ ...merged, status: determineStatus(merged) });
-    }
-    return success;
+    const ok = await updateLog(logId, patch);
+    if (ok) toast.success('Log updated');
+    return ok;
   };
 
-  // --- loading states ---
-  if (maintenanceLoading || vehiclesLoading) {
+  // Loading UI
+  if (isLoading) {
     return (
       <div className='min-h-screen flex flex-col bg-dark-bg'>
         <Navbar />
@@ -251,7 +149,7 @@ const MaintenanceDetails = () => {
     );
   }
 
-  if (!maintenance) {
+  if (!log) {
     return (
       <div className='min-h-screen flex flex-col bg-dark-bg'>
         <Navbar />
@@ -259,11 +157,11 @@ const MaintenanceDetails = () => {
           <div className='container mx-auto px-4'>
             <div className='text-center py-12'>
               <h2 className='text-xl font-medium mb-4'>
-                Maintenance Record Not Found
+                Maintenance Log Not Found
               </h2>
               <p className='text-foreground/70 mb-6'>
-                The maintenance record you're looking for doesn't exist or you
-                don't have permission to view it.
+                The maintenance log you&apos;re looking for doesn&apos;t exist
+                or you don&apos;t have permission to view it.
               </p>
               <Button asChild>
                 <Link to='/dashboard'>Return to Dashboard</Link>
@@ -281,308 +179,351 @@ const MaintenanceDetails = () => {
       <Navbar />
       <main className='flex-1 pt-28 pb-16'>
         <div className='container mx-auto px-4'>
-          <div className='mb-6'>
-            <Button
-              variant='ghost'
-              size='sm'
-              className='mb-4 hover:bg-white/5'
-              asChild
-            >
-              <Link to='/dashboard'>
-                <ChevronLeft className='h-4 w-4 mr-1' />
-                Back to Dashboard
-              </Link>
-            </Button>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='mb-4 hover:bg-white/5'
+            asChild
+          >
+            <Link to='/dashboard'>
+              <ChevronLeft className='h-4 w-4 mr-1' />
+              Back to Dashboard
+            </Link>
+          </Button>
 
-            <div className='flex flex-col md:flex-row justify-between items-start gap-4 mb-8'>
-              <div>
-                <div className='flex items-center gap-2 mb-2'>
-                  <h1 className='text-3xl font-bold'>{maintenance.type}</h1>
+          <div className='flex flex-col md:flex-row justify-between items-start gap-4 mb-8'>
+            <div>
+              <div className='flex items-center gap-2 mb-2'>
+                <h1 className='text-3xl font-bold'>
+                  {vehicle
+                    ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+                    : 'Maintenance Log'}
+                </h1>
+                {status && (
                   <div
-                    className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusClass()}`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                      status === 'completed'
+                        ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                        : status === 'overdue'
+                        ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                        : 'bg-neon-blue/10 text-neon-blue border-neon-blue/20'
+                    }`}
                   >
-                    {maintenance.status.charAt(0).toUpperCase() +
-                      maintenance.status.slice(1)}
+                    {status[0].toUpperCase() + status.slice(1)}
+                  </div>
+                )}
+              </div>
+              {vehicle && (
+                <Link
+                  to={`/dashboard/vehicles/${vehicle.id}`}
+                  className='text-foreground/70 hover:text-neon-blue flex items-center gap-1'
+                >
+                  <Car className='h-4 w-4' />
+                  <span>
+                    {vehicle.year} {vehicle.make} {vehicle.model}
+                  </span>
+                </Link>
+              )}
+            </div>
+
+            <div className='flex gap-2'>
+              <Button
+                variant='outline'
+                className='border-white/10 hover:bg-white/5'
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <Edit className='h-4 w-4 mr-2 text-neon-blue' />
+                Edit
+              </Button>
+              <Button
+                variant='outline'
+                className='border-white/10 hover:bg-white/5'
+                onClick={handleDeleteLog}
+              >
+                <Trash className='h-4 w-4 mr-2 text-red-400' />
+                Delete
+              </Button>
+            </div>
+          </div>
+
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-8'>
+            <Card className='bg-dark-card border-white/10'>
+              <CardContent className='pt-6'>
+                <div className='flex items-start justify-between'>
+                  <div>
+                    <p className='text-foreground/70 text-sm mb-1'>Date</p>
+                    <h3 className='text-xl font-bold'>
+                      {formatDate(log.date)}
+                    </h3>
+                  </div>
+                  <div className='bg-neon-blue/10 p-2 rounded-lg'>
+                    <CalendarIcon className='h-5 w-5 text-neon-blue' />
                   </div>
                 </div>
-                {vehicle && (
-                  <Link
-                    to={`/dashboard/vehicles/${vehicle.id}`}
-                    className='text-foreground/70 hover:text-neon-blue flex items-center gap-1'
-                  >
-                    <Car className='h-4 w-4' />
-                    <span>
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </span>
-                  </Link>
-                )}
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className='flex gap-2'>
-                <Button
-                  variant='outline'
-                  className='border-white/10 hover:bg-white/5'
-                  onClick={() => setIsEditModalOpen(true)}
-                >
-                  <Edit className='h-4 w-4 mr-2 text-neon-blue' />
-                  Edit
-                </Button>
-                {maintenance.status !== 'completed' && (
-                  <Button
-                    onClick={handleComplete}
-                    disabled={isCompletingStatus}
-                    className='bg-green-500 hover:bg-green-600 text-white'
-                  >
-                    <Check className='h-4 w-4 mr-2' />
-                    {isCompletingStatus ? 'Saving...' : 'Mark as Completed'}
-                  </Button>
-                )}
-                <Button
-                  variant='outline'
-                  className='border-white/10 hover:bg-white/5'
-                  onClick={handleDelete}
-                >
-                  <Trash className='h-4 w-4 mr-2 text-red-400' />
-                  Delete
-                </Button>
-              </div>
-            </div>
-
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-8'>
-              <Card className='bg-dark-card border-white/10'>
-                <CardContent className='pt-6'>
-                  <div className='flex items-start justify-between'>
-                    <div>
-                      <p className='text-foreground/70 text-sm mb-1'>Date</p>
-                      <h3 className='text-xl font-bold'>
-                        {formatDate(maintenance.date)}
-                      </h3>
-                    </div>
-                    <div className='bg-neon-blue/10 p-2 rounded-lg'>
-                      <Calendar className='h-5 w-5 text-neon-blue' />
-                    </div>
+            <Card className='bg-dark-card border-white/10'>
+              <CardContent className='pt-6'>
+                <div className='flex items-start justify-between'>
+                  <div>
+                    <p className='text-foreground/70 text-sm mb-1'>Mileage</p>
+                    <h3 className='text-xl font-bold'>
+                      {log.mileage != null
+                        ? `${log.mileage.toLocaleString()} miles`
+                        : 'Not specified'}
+                    </h3>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className='bg-dark-card border-white/10'>
-                <CardContent className='pt-6'>
-                  <div className='flex items-start justify-between'>
-                    <div>
-                      <p className='text-foreground/70 text-sm mb-1'>Mileage</p>
-                      <h3 className='text-xl font-bold'>
-                        {maintenance.mileage != null
-                          ? `${maintenance.mileage.toLocaleString()} miles`
-                          : 'Not specified'}
-                      </h3>
-                    </div>
-                    <div className='bg-yellow-500/10 p-2 rounded-lg'>
-                      <Car className='h-5 w-5 text-yellow-500' />
-                    </div>
+                  <div className='bg-yellow-500/10 p-2 rounded-lg'>
+                    <Car className='h-5 w-5 text-yellow-500' />
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className='bg-dark-card border-white/10'>
-                <CardContent className='pt-6'>
-                  <div className='flex items-start justify-between'>
-                    <div>
-                      <p className='text-foreground/70 text-sm mb-1'>Cost</p>
-                      <h3 className='text-xl font-bold'>
-                        {maintenance.cost != null
-                          ? `$${maintenance.cost.toFixed(2)}`
-                          : 'Not specified'}
-                      </h3>
-                    </div>
-                    <div className='bg-green-500/10 p-2 rounded-lg'>
-                      <DollarSign className='h-5 w-5 text-green-500' />
-                    </div>
+            <Card className='bg-dark-card border-white/10'>
+              <CardContent className='pt-6'>
+                <div className='flex items-start justify-between'>
+                  <div>
+                    <p className='text-foreground/70 text-sm mb-1'>
+                      Grand Total
+                    </p>
+                    <h3 className='text-xl font-bold'>
+                      {formatUSD(log.totals.grand_total)}
+                    </h3>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                  <div className='bg-green-500/10 p-2 rounded-lg'>
+                    <DollarSign className='h-5 w-5 text-green-500' />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-            <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
-              <div className='lg:col-span-2'>
-                <Card className='bg-dark-card border-white/10 mb-8'>
-                  <CardContent className='p-6'>
-                    <h2 className='text-xl font-semibold mb-4'>
-                      Maintenance Details
-                    </h2>
-
-                    <div className='space-y-4'>
-                      <div>
-                        <h3 className='text-lg font-medium mb-2'>
-                          Description
-                        </h3>
-                        <p className='text-foreground/70'>
-                          {maintenance.description ||
-                            'No description provided.'}
-                        </p>
+          <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+            {/* Details + Items */}
+            <div className='lg:col-span-2'>
+              <Card className='bg-dark-card border-white/10 mb-8'>
+                <CardContent className='p-6'>
+                  <h2 className='text-xl font-semibold mb-4'>Log Details</h2>
+                  <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4'>
+                    {log.vendor_name && (
+                      <div className='inline-flex items-center gap-2 text-foreground/80'>
+                        <MapPin className='w-4 h-4' />
+                        <span className='text-sm'>Vendor:</span>
+                        <span className='font-medium'>{log.vendor_name}</span>
                       </div>
-
-                      {maintenance.notes && (
-                        <div>
-                          <h3 className='text-lg font-medium mb-2'>Notes</h3>
-                          <p className='text-foreground/70'>
-                            {maintenance.notes}
-                          </p>
-                        </div>
-                      )}
-
-                      {maintenance.performed_by && (
-                        <div>
-                          <h3 className='text-lg font-medium mb-2'>
-                            Performed By
-                          </h3>
-                          <p className='text-foreground/70'>
-                            {maintenance.performed_by}
-                          </p>
-                        </div>
-                      )}
+                    )}
+                    {log.location && (
+                      <div className='inline-flex items-center gap-2 text-foreground/80'>
+                        <MapPin className='w-4 h-4' />
+                        <span className='text-sm'>Location:</span>
+                        <span className='font-medium'>{log.location}</span>
+                      </div>
+                    )}
+                    {log.invoice_number && (
+                      <div className='inline-flex items-center gap-2 text-foreground/80'>
+                        <Receipt className='w-4 h-4' />
+                        <span className='text-sm'>Invoice:</span>
+                        <span className='font-medium'>
+                          {log.invoice_number}
+                        </span>
+                      </div>
+                    )}
+                    <div className='inline-flex items-center gap-2 text-foreground/80'>
+                      <FileText className='w-4 h-4' />
+                      <span className='text-sm'>Items:</span>
+                      <span className='font-medium'>
+                        {log.totals.items_count}
+                      </span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+
+                  {log.notes && (
+                    <div className='mb-6'>
+                      <h3 className='text-lg font-medium mb-2'>Notes</h3>
+                      <p className='text-foreground/70'>{log.notes}</p>
+                    </div>
+                  )}
+
+                  <h3 className='text-lg font-medium mb-3'>Service Items</h3>
+                  <div className='space-y-2'>
+                    {log.items.length === 0 ? (
+                      <div className='text-sm text-foreground/60'>
+                        No service items added.
+                      </div>
+                    ) : (
+                      log.items.map((it) => (
+                        <div
+                          key={it.id}
+                          className='grid grid-cols-1 md:grid-cols-12 gap-3 items-start rounded-xl p-3 border border-white/10 bg-dark-bg/40'
+                        >
+                          <div className='md:col-span-7'>
+                            <div className='font-medium'>{it.type}</div>
+                            {it.description && (
+                              <div className='text-sm text-foreground/70'>
+                                {it.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className='md:col-span-3'>
+                            <div className='text-xs text-white/70 mb-1'>
+                              Status
+                            </div>
+                            <div
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${
+                                it.status === 'completed'
+                                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                  : it.status === 'overdue'
+                                  ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                  : 'bg-neon-blue/10 text-neon-blue border-neon-blue/20'
+                              }`}
+                            >
+                              {it.status === 'completed' ? (
+                                <Check className='w-3.5 h-3.5' />
+                              ) : it.status === 'overdue' ? (
+                                <AlertTriangle className='w-3.5 h-3.5' />
+                              ) : (
+                                <Clock className='w-3.5 h-3.5' />
+                              )}
+                              {it.status[0].toUpperCase() + it.status.slice(1)}
+                            </div>
+                          </div>
+                          <div className='md:col-span-2 flex items-end justify-end'>
+                            {/* Future: add per-item edit/remove actions */}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions + Vehicle */}
+            <div>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-xl font-semibold'>Quick Actions</h2>
               </div>
 
-              <div>
-                <div className='flex items-center justify-between mb-4'>
-                  <h2 className='text-xl font-semibold'>Quick Actions</h2>
-                </div>
-
-                <Card className='bg-dark-card border-white/10'>
-                  <CardContent className='p-4'>
-                    <div className='space-y-2'>
-                      {vehicle && (
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='w-full justify-start gap-2 border-white/10 hover:bg-white/5'
-                          asChild
-                        >
-                          <Link to={`/dashboard/vehicles/${vehicle.id}`}>
-                            <Car className='h-4 w-4' />
-                            <span>View Vehicle Details</span>
-                          </Link>
-                        </Button>
-                      )}
-
+              <Card className='bg-dark-card border-white/10'>
+                <CardContent className='p-4'>
+                  <div className='space-y-2'>
+                    {vehicle && (
                       <Button
                         variant='outline'
                         size='sm'
                         className='w-full justify-start gap-2 border-white/10 hover:bg-white/5'
                         asChild
                       >
-                        <Link
-                          to={`/dashboard?addMaintenance=${maintenance.vehicle_id}`}
-                        >
-                          <Wrench className='h-4 w-4' />
-                          <span>Add New Maintenance</span>
+                        <Link to={`/dashboard/vehicles/${vehicle.id}`}>
+                          <Car className='h-4 w-4' />
+                          <span>View Vehicle Details</span>
                         </Link>
                       </Button>
+                    )}
 
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        className='w-full justify-start gap-2 border-white/10 hover:bg-neon-blue/10 text-neon-blue'
-                        onClick={() => setIsEditModalOpen(true)}
-                      >
-                        <Edit className='h-4 w-4' />
-                        <span>Edit Record</span>
-                      </Button>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='w-full justify-start gap-2 border-white/10 hover:bg-white/5'
+                      asChild
+                    >
+                      <Link to={`/dashboard?addMaintenance=${log.vehicle_id}`}>
+                        <Wrench className='h-4 w-4' />
+                        <span>Add New Maintenance</span>
+                      </Link>
+                    </Button>
 
-                      {maintenance.status !== 'completed' && (
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='w-full justify-start gap-2 border-white/10 hover:bg-green-500/10 text-green-500'
-                          onClick={handleComplete}
-                        >
-                          <Check className='h-4 w-4' />
-                          <span>Mark as Completed</span>
-                        </Button>
-                      )}
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='w-full justify-start gap-2 border-white/10 hover:bg-neon-blue/10 text-neon-blue'
+                      onClick={() => setIsEditModalOpen(true)}
+                    >
+                      <Edit className='h-4 w-4' />
+                      <span>Edit Log</span>
+                    </Button>
 
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        className='w-full justify-start gap-2 border-white/10 hover:bg-red-500/10 text-red-400'
-                        onClick={handleDelete}
-                      >
-                        <Trash className='h-4 w-4' />
-                        <span>Delete Record</span>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {vehicle && (
-                  <div className='mt-6'>
-                    <div className='flex items-center justify-between mb-4'>
-                      <h2 className='text-xl font-semibold'>
-                        Vehicle Information
-                      </h2>
-                    </div>
-
-                    <Card className='bg-dark-card border-white/10'>
-                      <CardContent className='p-4'>
-                        <div className='flex items-center gap-3 mb-3'>
-                          {vehicle.image ? (
-                            <img
-                              src={vehicle.image}
-                              alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                              className='w-16 h-16 object-cover rounded-lg'
-                            />
-                          ) : (
-                            <div className='w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center'>
-                              <Car className='w-8 h-8 text-foreground/20' />
-                            </div>
-                          )}
-                          <div>
-                            <h3 className='font-medium'>
-                              {vehicle.year} {vehicle.make} {vehicle.model}
-                            </h3>
-                            <p className='text-sm text-foreground/70'>
-                              {vehicle.mileage != null
-                                ? `${vehicle.mileage.toLocaleString()} miles`
-                                : 'Mileage not specified'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='w-full justify-center gap-2 border-white/10 hover:bg-white/5 mt-2'
-                          asChild
-                        >
-                          <Link to={`/dashboard/vehicles/${vehicle.id}`}>
-                            <Car className='h-4 w-4' />
-                            <span>View Full Vehicle Details</span>
-                          </Link>
-                        </Button>
-                      </CardContent>
-                    </Card>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='w-full justify-start gap-2 border-white/10 hover:bg-red-500/10 text-red-400'
+                      onClick={handleDeleteLog}
+                    >
+                      <Trash className='h-4 w-4' />
+                      <span>Delete Log</span>
+                    </Button>
                   </div>
-                )}
-              </div>
+                </CardContent>
+              </Card>
+
+              {vehicle && (
+                <div className='mt-6'>
+                  <div className='flex items-center justify-between mb-4'>
+                    <h2 className='text-xl font-semibold'>
+                      Vehicle Information
+                    </h2>
+                  </div>
+
+                  <Card className='bg-dark-card border-white/10'>
+                    <CardContent className='p-4'>
+                      <div className='flex items-center gap-3 mb-3'>
+                        {vehicle.image ? (
+                          <img
+                            src={vehicle.image}
+                            alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                            className='w-16 h-16 object-cover rounded-lg'
+                          />
+                        ) : (
+                          <div className='w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center'>
+                            <Car className='w-8 h-8 text-foreground/20' />
+                          </div>
+                        )}
+                        <div>
+                          <h3 className='font-medium'>
+                            {vehicle.year} {vehicle.make} {vehicle.model}
+                          </h3>
+                          <p className='text-sm text-foreground/70'>
+                            {vehicle.mileage != null
+                              ? `${vehicle.mileage.toLocaleString()} miles`
+                              : 'Mileage not specified'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        className='w-full justify-center gap-2 border-white/10 hover:bg-white/5 mt-2'
+                        asChild
+                      >
+                        <Link to={`/dashboard/vehicles/${vehicle.id}`}>
+                          <Car className='h-4 w-4' />
+                          <span>View Full Vehicle Details</span>
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
       <Footer />
 
-      {/* Edit Maintenance Modal */}
+      {/* Edit Log Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className='bg-dark-card border border-white/10 sm:max-w-[600px]'>
           <DialogHeader>
-            <DialogTitle>Edit Maintenance Record</DialogTitle>
+            <DialogTitle>Edit Maintenance Log</DialogTitle>
           </DialogHeader>
-          {maintenance && (
-            <EditMaintenanceForm
-              maintenance={maintenance as MaintenanceRecord}
+          {log && (
+            <EditMaintenanceLogForm
+              log={log}
               vehicles={vehicles}
-              onSubmit={handleUpdateMaintenance}
+              onSubmit={handleUpdateLog}
               onCancel={() => setIsEditModalOpen(false)}
             />
           )}
@@ -590,6 +531,4 @@ const MaintenanceDetails = () => {
       </Dialog>
     </div>
   );
-};
-
-export default MaintenanceDetails;
+}

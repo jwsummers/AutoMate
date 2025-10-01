@@ -19,18 +19,21 @@ export function FeatureCarousel({
   className = '',
 }: FeatureCarouselProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const isAutoScrolling = useRef(false); // guard so onScroll won't fight programmatic scroll
   const [index, setIndex] = useState(0);
   const [isHover, setIsHover] = useState(false);
 
   const goTo = useCallback(
     (i: number) => {
       const el = containerRef.current;
-      if (!el) return;
-      const max = slides.length - 1;
+      if (!el || slides.length === 0) return;
+
       const next = (i + slides.length) % slides.length;
       const width = el.clientWidth;
+
+      isAutoScrolling.current = true;
       el.scrollTo({ left: next * width, behavior: 'smooth' });
-      setIndex(Math.min(Math.max(next, 0), max));
+      setIndex(next);
     },
     [slides.length]
   );
@@ -38,12 +41,13 @@ export function FeatureCarousel({
   const next = useCallback(() => goTo(index + 1), [goTo, index]);
   const prev = useCallback(() => goTo(index - 1), [goTo, index]);
 
-  // Update index when user scrolls (swipe)
+  // Update index when user scrolls (manual swipe/drag)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const onScroll = () => {
+      if (isAutoScrolling.current) return; // ignore programmatic scrolls
       const width = el.clientWidth || 1;
       const current = Math.round(el.scrollLeft / width);
       if (current !== index) setIndex(current);
@@ -52,6 +56,40 @@ export function FeatureCarousel({
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, [index]);
+
+  // Clear auto-scroll guard on 'scrollend' (with fallback timer)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const clearGuard = () => {
+      isAutoScrolling.current = false;
+    };
+
+    // Fallback for browsers without 'scrollend'
+    let fallback: number | undefined;
+    const startFallbackTimer = () => {
+      if (fallback) window.clearTimeout(fallback);
+      // Allow time for smooth scroll + snap to settle
+      fallback = window.setTimeout(() => {
+        isAutoScrolling.current = false;
+      }, 600);
+    };
+
+    const onAnyScroll = () => {
+      // If we're auto-scrolling, keep nudging the fallback timer
+      if (isAutoScrolling.current) startFallbackTimer();
+    };
+
+    el.addEventListener('scrollend', clearGuard);
+    el.addEventListener('scroll', onAnyScroll, { passive: true });
+
+    return () => {
+      el.removeEventListener('scrollend', clearGuard);
+      el.removeEventListener('scroll', onAnyScroll);
+      if (fallback) window.clearTimeout(fallback);
+    };
+  }, []);
 
   // Keep correct position on resize
   useEffect(() => {
@@ -68,11 +106,12 @@ export function FeatureCarousel({
     return () => ro.disconnect();
   }, [index]);
 
-  // Autoplay
+  // Autoplay (paused on hover)
   useEffect(() => {
-    if (slides.length <= 1 || isHover) return;
-    const t = setInterval(next, autoPlayMs);
-    return () => clearInterval(t);
+    if (slides.length <= 1) return;
+    if (isHover) return;
+    const t = window.setInterval(next, autoPlayMs);
+    return () => window.clearInterval(t);
   }, [slides.length, isHover, next, autoPlayMs]);
 
   // Keyboard arrows when carousel focused
@@ -94,13 +133,13 @@ export function FeatureCarousel({
       {/* Slides container */}
       <div
         ref={containerRef}
-        className='w-full h-full overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth'
+        className='w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar snap-x snap-mandatory snap-always scroll-smooth'
       >
-        <div className='flex w-full h-full'>
+        <div className='flex flex-nowrap w-full h-full'>
           {slides.map((s, i) => (
             <div
               key={i}
-              className='min-w-full snap-start relative'
+              className='relative h-full flex-[0_0_100%] snap-start'
               aria-hidden={index !== i}
               aria-roledescription='slide'
               aria-label={`${i + 1} of ${slides.length}`}
@@ -108,7 +147,7 @@ export function FeatureCarousel({
               <img
                 src={s.src}
                 alt={s.alt}
-                className='w-full h-full object-cover'
+                className='block w-full h-full object-contain'
                 draggable={false}
               />
               {s.caption ? (

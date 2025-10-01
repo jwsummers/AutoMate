@@ -1,7 +1,47 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  CalendarPlus,
+  Car,
+  Clock,
+  LayoutDashboard,
+  MessageSquare,
+  Wrench,
+  AlertTriangle,
+  Check,
+  Plus,
+  Brain,
+  Lock,
+  SlashSquare,
+} from 'lucide-react';
+
+import Navbar from '@/components/Layout/Navbar';
+import Footer from '@/components/Layout/Footer';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import VehicleCard from '@/components/common/VehicleCard';
+import MaintenanceItem from '@/components/common/MaintenanceItem';
+
+import { useAuth } from '@/contexts/AuthContext';
+import { useVehicles, Vehicle } from '@/hooks/useVehicles';
+import {
+  useMaintenanceLogs,
+  MaintenanceLogWithItems,
+  MaintenanceItem as MaintItem,
+  MaintenanceStatus,
+} from '@/hooks/useMaintenanceLogs';
+
+import { useMaintenancePredictions } from '@/hooks/useMaintenancePredictions';
+import MaintenancePredictions from '@/components/dashboard/MaintenancePredictions';
+
+import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
+import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
+import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
+import VehicleHealthModal from '@/components/dashboard/VehicleHealthModal';
+import AIAssistant from '@/components/dashboard/AIAssistant';
+import { FeatureGate } from '@/components/FeatureGate';
 import {
   Dialog,
   DialogContent,
@@ -9,133 +49,28 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import {
-  CalendarPlus,
-  Car,
-  Clock,
-  LayoutDashboard,
-  MessageSquare,
-  SlashSquare,
-  Wrench,
-  AlertTriangle,
-  Check,
-  Plus,
-  Brain,
-  CalendarIcon,
-  Crown,
-  Lock,
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
-import Navbar from '@/components/Layout/Navbar';
-import Footer from '@/components/Layout/Footer';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import VehicleCard from '@/components/common/VehicleCard';
-import MaintenanceItem from '@/components/common/MaintenanceItem';
-import { useAuth } from '@/contexts/AuthContext';
-import { useVehicles, Vehicle } from '@/hooks/useVehicles';
-import { useMaintenance, MaintenanceWithStatus } from '@/hooks/useMaintenance';
-import { useMaintenancePredictions } from '@/hooks/useMaintenancePredictions';
-import MaintenancePredictions from '@/components/dashboard/MaintenancePredictions';
-import AddVehicleForm from '@/components/dashboard/AddVehicleForm';
-import AddMaintenanceForm from '@/components/dashboard/AddMaintenanceForm';
-import EditVehicleForm from '@/components/dashboard/EditVehicleForm';
-import VehicleHealthModal from '@/components/dashboard/VehicleHealthModal';
-import AIAssistant from '@/components/dashboard/AIAssistant';
-import { FeatureGate } from '@/components/FeatureGate';
 import { toast } from 'sonner';
 
-const mockVehicles = [
-  {
-    id: 'v1',
-    make: 'Tesla',
-    model: 'Model 3',
-    year: 2022,
-    image:
-      'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3',
-    mileage: 15000,
-    nextService: 'Oil Change in 2,000 miles',
-    healthScore: 92,
-    alerts: 0,
-  },
-  {
-    id: 'v2',
-    make: 'Toyota',
-    model: 'Camry',
-    year: 2019,
-    image:
-      'https://images.unsplash.com/photo-1679678691006-0ad24fecb769?q=80&w=2574&auto=format&fit=crop&ixlib=rb-4.0.3',
-    mileage: 45000,
-    nextService: 'Tire Rotation in 500 miles',
-    healthScore: 78,
-    alerts: 1,
-  },
-  {
-    id: 'v3',
-    make: 'Ford',
-    model: 'F-150',
-    year: 2020,
-    image:
-      'https://images.unsplash.com/photo-1605893477799-b99a3bc31408?q=80&w=2574&auto=format&fit=crop&ixlib=rb-4.0.3',
-    mileage: 32000,
-    nextService: 'Brake Check & Fluid Change',
-    healthScore: 84,
-    alerts: 0,
-  },
-];
+type Status = 'completed' | 'upcoming' | 'overdue';
 
-const mockMaintenanceTasks = [
-  {
-    id: 'm1',
-    title: 'Oil Change',
-    description:
-      'Regular maintenance - synthetic oil change at certified dealership',
-    date: '2023-12-15',
-    status: 'upcoming' as const,
-    mileage: 17500,
-    vehicleId: 'v1',
-  },
-  {
-    id: 'm2',
-    title: 'Tire Rotation',
-    description: 'Front to back tire rotation and pressure check',
-    date: '2023-12-05',
-    status: 'overdue' as const,
-    mileage: 45500,
-    vehicleId: 'v2',
-  },
-  {
-    id: 'm3',
-    title: 'Brake Fluid Replacement',
-    description: 'Replacement of brake fluid and brake system inspection',
-    date: '2023-11-20',
-    status: 'completed' as const,
-    mileage: 31000,
-    cost: 120.0,
-    vehicleId: 'v3',
-  },
-  {
-    id: 'm4',
-    title: 'Air Filter Replacement',
-    description: 'Replace cabin and engine air filters',
-    date: '2023-12-28',
-    status: 'upcoming' as const,
-    mileage: 17800,
-    vehicleId: 'v1',
-  },
-];
+function aggregateStatus(items: MaintItem[]): Status {
+  if (items.some((i) => i.status === 'overdue')) return 'overdue';
+  if (items.some((i) => i.status === 'upcoming')) return 'upcoming';
+  return 'completed';
+}
 
-const Dashboard = () => {
+export default function Dashboard() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
-  const [isAddMaintenanceOpen, setIsAddMaintenanceOpen] = useState(false);
-  const [isEditVehicleOpen, setIsEditVehicleOpen] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
-  const [selectedHealthVehicle, setSelectedHealthVehicle] =
-    useState<Vehicle | null>(null);
 
-  const { user, isPro } = useAuth();
+  const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
+  const [isEditVehicleOpen, setIsEditVehicleOpen] = useState(false);
+  const [isAddMaintenanceOpen, setIsAddMaintenanceOpen] = useState(false);
+
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+
+  const { isPro, subscriptionData } = useAuth();
+
   const {
     vehicles,
     loading: vehiclesLoading,
@@ -145,190 +80,106 @@ const Dashboard = () => {
   } = useVehicles();
 
   const {
-    maintenanceRecords,
-    loading: maintenanceLoading,
-    addMaintenanceRecord,
-    markMaintenanceAsCompleted,
-    deleteMaintenanceRecord,
-  } = useMaintenance();
+    logs,
+    loading: logsLoading,
+    fetchLogs,
+    deleteLog,
+  } = useMaintenanceLogs();
 
-  const {
-    predictions,
-    urgentPredictions,
-    loading: predictionsLoading,
-  } = useMaintenancePredictions();
+  const { urgentPredictions } = useMaintenancePredictions();
 
-  // Process URL params only once per mount to prevent repeat modal openings
-  const paramsProcessedRef = useRef(false);
   useEffect(() => {
-    if (paramsProcessedRef.current) return;
+    fetchLogs();
+  }, [fetchLogs]);
 
-    const params = new URLSearchParams(window.location.search);
-    const demoMode = params.get('demo') === 'true';
-    const editVehicleId = params.get('editVehicle');
-    const addMaintenanceVehicleId = params.get('addMaintenance');
+  const isLoading = vehiclesLoading || logsLoading;
 
-    setIsDemoMode(demoMode);
-
-    if (editVehicleId && !demoMode) {
-      const vehicle = vehicles.find((v) => v.id === editVehicleId);
-      if (vehicle) {
-        setSelectedVehicle(vehicle);
-        setIsEditVehicleOpen(true);
-      }
-    }
-
-    if (addMaintenanceVehicleId && !demoMode) {
-      setIsAddMaintenanceOpen(true);
-    }
-
-    // mark processed so further vehicle state changes don’t re-open
-    paramsProcessedRef.current = true;
-  }, [vehicles]);
-
-  const displayVehicles = isDemoMode ? mockVehicles : vehicles;
-
-  const normalizedMockTasks: MaintenanceWithStatus[] = mockMaintenanceTasks.map(
-    (task) => ({
-      id: task.id,
-      vehicle_id: task.vehicleId,
-      type: task.title,
-      description: task.description,
-      date: task.date,
-      status: task.status,
-      mileage: task.mileage,
-      cost: 'cost' in task && typeof task.cost === 'number' ? task.cost : null,
-    })
+  const overdueCount = useMemo(
+    () => logs.filter((l) => aggregateStatus(l.items) === 'overdue').length,
+    [logs]
+  );
+  const upcomingCount = useMemo(
+    () => logs.filter((l) => aggregateStatus(l.items) === 'upcoming').length,
+    [logs]
+  );
+  const completedCount = useMemo(
+    () => logs.filter((l) => aggregateStatus(l.items) === 'completed').length,
+    [logs]
   );
 
-  const displayMaintenance = isDemoMode
-    ? normalizedMockTasks
-    : maintenanceRecords;
+  const vehicleLimit = subscriptionData?.vehicles_limit ?? 1;
+  const maintLimit = subscriptionData?.maintenance_limit ?? 25;
 
-  const upcomingMaintenance = displayMaintenance.filter(
-    (task) => task.status === 'upcoming' || task.status === 'overdue'
-  );
+  const canAddVehicle = vehicleLimit < 0 || vehicles.length < vehicleLimit;
+  const canAddMaintenance = maintLimit < 0 || logs.length < maintLimit;
 
-  const completedMaintenance = displayMaintenance.filter(
-    (task) => task.status === 'completed'
-  );
-
-  const overdueCount = displayMaintenance.filter(
-    (task) => task.status === 'overdue'
-  ).length;
-  const upcomingCount = displayMaintenance.filter(
-    (task) => task.status === 'upcoming'
-  ).length;
-
-  // Dashboard.tsx – before opening "Add Vehicle"
-  const { subscriptionData } = useAuth();
-  const handleAddVehicle = async () => {
-    if (isDemoMode) {
-      toast.info('Feature disabled in demo mode');
-      return;
-    }
-    const limit = subscriptionData?.vehicles_limit ?? 1;
-    if (limit >= 0 && displayVehicles.length >= limit) {
-      toast.error('You’ve reached your vehicle limit for this plan.');
+  const handleAddVehicle = () => {
+    if (!canAddVehicle) {
+      toast.error(
+        vehicleLimit === 1
+          ? 'You’ve reached your plan limit of 1 vehicle.'
+          : `You’ve reached your plan limit of ${vehicleLimit} vehicles.`
+      );
       return;
     }
     setIsAddVehicleOpen(true);
   };
 
-  // --- Maintenance capacity (soft) ---
-  const maintLimit = subscriptionData?.maintenance_limit ?? 25; // default for free tier
-  const maintCount = maintenanceRecords?.length ?? 0;
-  const canAddMaintenance = maintLimit < 0 || maintCount < maintLimit; // negative => unlimited
-  const remainingMaint =
-    maintLimit < 0 ? Infinity : Math.max(maintLimit - maintCount, 0);
-
-  const handleAddMaintenance = () => {
-    if (isDemoMode) {
-      toast.info('Feature disabled in demo mode');
-      return;
+  const handleEditVehicle = (id: string) => {
+    const v = vehicles.find((x) => x.id === id);
+    if (v) {
+      setSelectedVehicle(v);
+      setIsEditVehicleOpen(true);
     }
-
-    if (!canAddMaintenance) {
-      const msg =
-        maintLimit === 1
-          ? 'You’ve reached your plan limit of 1 maintenance log.'
-          : `You’ve reached your plan limit of ${maintLimit} maintenance logs.`;
-      toast.error(`${msg} Visit Pricing to upgrade for more.`);
-      return;
-    }
-
-    setIsAddMaintenanceOpen(true);
   };
 
   const handleDeleteVehicle = (id: string) => {
-    if (isDemoMode) {
-      toast.info('Feature disabled in demo mode');
-      return;
-    }
-
     if (
       window.confirm(
-        'Are you sure you want to delete this vehicle? This will also delete all maintenance records associated with this vehicle.'
+        'Are you sure you want to delete this vehicle? This will also delete all maintenance logs associated with this vehicle.'
       )
     ) {
       deleteVehicle(id);
     }
   };
 
-  const handleEditVehicle = (id: string) => {
-    if (isDemoMode) {
-      toast.info('Feature disabled in demo mode');
+  const handleAddMaintenance = () => {
+    if (!canAddMaintenance) {
+      toast.error(
+        maintLimit === 1
+          ? 'You’ve reached your plan limit of 1 maintenance log.'
+          : `You’ve reached your plan limit of ${maintLimit} maintenance logs.`
+      );
       return;
     }
-
-    const vehicle = vehicles.find((v) => v.id === id);
-    if (vehicle) {
-      setSelectedVehicle(vehicle);
-      setIsEditVehicleOpen(true);
-    }
+    setIsAddMaintenanceOpen(true);
   };
 
-  const handleViewVehicleHealth = (vehId: string) => {
-    if (isDemoMode) {
-      const mockVehicle = mockVehicles.find((v) => v.id === vehId);
-      if (mockVehicle) {
-        const fullMock: Vehicle = {
-          id: mockVehicle.id,
-          user_id: 'demo',
-          make: mockVehicle.make,
-          model: mockVehicle.model,
-          year: mockVehicle.year,
-          mileage: mockVehicle.mileage,
-          color: '',
-          license_plate: '',
-          vin: '',
-          notes: '',
-        };
-        setSelectedHealthVehicle(fullMock);
-        setIsHealthModalOpen(true);
-      }
-    } else {
-      const found = vehicles.find((v) => v.id === vehId);
-      if (found) {
-        setSelectedHealthVehicle(found);
-        setIsHealthModalOpen(true);
-      }
-    }
+  const handleViewMaintenance = (logId: string) => {
+    navigate(`/dashboard/maintenance/${logId}`);
   };
 
-  const handleViewMaintenance = (id: string) => {
-    window.location.href = `/dashboard/maintenance/${id}`;
+  // Helpers to display logs using your existing <MaintenanceItem /> card
+  const toMaintenanceItemProps = (log: MaintenanceLogWithItems) => {
+    const status = aggregateStatus(log.items);
+    const title =
+      log.items.length > 0
+        ? log.items.map((i) => i.type).join(', ')
+        : 'Maintenance';
+    const description =
+      log.notes ||
+      (log.items.length > 0 ? log.items[0].description ?? '' : '') ||
+      'Maintenance log';
+    return {
+      id: log.id,
+      title,
+      description,
+      date: log.date,
+      status,
+      mileage: log.mileage ?? undefined,
+      cost: log.totals.grand_total ?? undefined,
+    };
   };
-
-  const handleCompleteMaintenance = (id: string) => {
-    if (isDemoMode) {
-      toast.info('Feature disabled in demo mode');
-      return;
-    }
-    markMaintenanceAsCompleted(id);
-  };
-
-  const isLoading = vehiclesLoading || maintenanceLoading;
 
   return (
     <div className='min-h-screen flex flex-col bg-dark-bg'>
@@ -338,66 +189,46 @@ const Dashboard = () => {
         <div className='container mx-auto px-4'>
           <DashboardHeader onAddVehicle={handleAddVehicle} />
 
-          {isDemoMode && (
-            <div className='mb-6 p-4 bg-yellow-500/10 text-yellow-400 rounded-lg'>
-              <p className='text-sm font-medium'>
-                You are viewing the demo mode with sample data.
-                <Link to='/dashboard' className='ml-2 underline'>
-                  Click here
-                </Link>{' '}
-                to view your actual data.
-              </p>
-            </div>
-          )}
-
-          {/* Welcome guidance for new users */}
-          {!isDemoMode &&
-            displayVehicles.length === 0 &&
-            displayMaintenance.length === 0 && (
-              <Card className='bg-gradient-to-r from-neon-blue/10 to-neon-purple/10 border-white/10 mb-8'>
-                <CardContent className='p-6'>
-                  <div className='flex items-start gap-4'>
-                    <div className='bg-neon-blue/20 p-3 rounded-full'>
-                      <Car className='h-6 w-6 text-neon-blue' />
-                    </div>
-                    <div className='flex-1'>
-                      <h3 className='text-lg font-semibold mb-2'>
-                        Welcome to AutoMate!
-                      </h3>
-                      <p className='text-foreground/70 mb-4'>
-                        Get started by adding your first vehicle. Once added,
-                        you can track maintenance, schedule services, and get
-                        AI-powered insights to keep your vehicle running
-                        smoothly.
-                      </p>
-                      <div className='flex flex-col sm:flex-row gap-3'>
-                        <Button
-                          onClick={handleAddVehicle}
-                          className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
-                        >
-                          <Plus className='h-4 w-4 mr-2' />
-                          Add Your First Vehicle
-                        </Button>
-                        <Button
-                          variant='outline'
-                          className='border-white/10 hover:bg-white/5'
-                        >
-                          <Link
-                            to='/pricing'
-                            className='flex items-center gap-2'
-                          >
-                            <Crown className='h-4 w-4' />
-                            View Pro Features
-                          </Link>
-                        </Button>
-                      </div>
+          {vehicles.length === 0 && logs.length === 0 && (
+            <Card className='bg-gradient-to-r from-neon-blue/10 to-neon-purple/10 border-white/10 mb-8'>
+              <CardContent className='p-6'>
+                <div className='flex items-start gap-4'>
+                  <div className='bg-neon-blue/20 p-3 rounded-full'>
+                    <Car className='h-6 w-6 text-neon-blue' />
+                  </div>
+                  <div className='flex-1'>
+                    <h3 className='text-lg font-semibold mb-2'>
+                      Welcome to AutoMate!
+                    </h3>
+                    <p className='text-foreground/70 mb-4'>
+                      Add your first vehicle to start tracking maintenance and
+                      get AI-powered insights.
+                    </p>
+                    <div className='flex flex-col sm:flex-row gap-3'>
+                      <Button
+                        onClick={handleAddVehicle}
+                        className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
+                      >
+                        <Plus className='h-4 w-4 mr-2' />
+                        Add Your First Vehicle
+                      </Button>
+                      <Button
+                        variant='outline'
+                        className='border-white/10 hover:bg-white/5'
+                      >
+                        <Link to='/pricing' className='flex items-center gap-2'>
+                          <Lock className='h-4 w-4' />
+                          View Pro Features
+                        </Link>
+                      </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          {isLoading && !isDemoMode ? (
+          {isLoading ? (
             <div className='flex items-center justify-center py-12'>
               <div className='animate-spin mr-2'>
                 <svg
@@ -472,6 +303,7 @@ const Dashboard = () => {
                 </TabsTrigger>
               </TabsList>
 
+              {/* Overview */}
               <TabsContent value='overview' className='mt-0 animate-fade-in'>
                 <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-8'>
                   <Card className='bg-dark-card border-white/10'>
@@ -482,10 +314,10 @@ const Dashboard = () => {
                             Total Vehicles
                           </p>
                           <h3 className='text-3xl font-bold'>
-                            {displayVehicles.length}
+                            {vehicles.length}
                           </h3>
                           <p className='text-xs text-foreground/50 mt-1'>
-                            {displayVehicles.length === 0
+                            {vehicles.length === 0
                               ? 'Add your first vehicle to get started'
                               : "Click 'Add Vehicle' to add more"}
                           </p>
@@ -528,11 +360,7 @@ const Dashboard = () => {
                             AI Alerts
                           </p>
                           <h3 className='text-3xl font-bold'>
-                            {isPro
-                              ? !isDemoMode
-                                ? urgentPredictions.length
-                                : 2
-                              : 0}
+                            {isPro ? urgentPredictions.length : 0}
                           </h3>
                           <p className='text-xs text-foreground/50 mt-1'>
                             {isPro
@@ -549,6 +377,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+                  {/* Vehicles quick view */}
                   <div className='lg:col-span-2 space-y-6'>
                     <div>
                       <div className='flex items-center justify-between mb-4'>
@@ -557,8 +386,7 @@ const Dashboard = () => {
                             Your Vehicles
                           </h2>
                           <p className='text-foreground/60'>
-                            Add vehicles to track maintenance and get service
-                            reminders
+                            Add vehicles to track maintenance and get reminders
                           </p>
                         </div>
                         <Button
@@ -573,7 +401,7 @@ const Dashboard = () => {
                       </div>
 
                       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                        {displayVehicles.length === 0 ? (
+                        {vehicles.length === 0 ? (
                           <Card className='col-span-2 bg-dark-card border-white/10 border-dashed'>
                             <CardContent className='p-8 text-center'>
                               <Car className='w-12 h-12 text-foreground/20 mx-auto mb-4' />
@@ -582,7 +410,7 @@ const Dashboard = () => {
                               </h3>
                               <p className='text-foreground/70 mb-4'>
                                 Start by adding your first vehicle to track
-                                maintenance and get service reminders.
+                                maintenance and get reminders.
                               </p>
                               <Button
                                 className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
@@ -594,9 +422,14 @@ const Dashboard = () => {
                             </CardContent>
                           </Card>
                         ) : (
-                          displayVehicles
-                            .slice(0, 2)
-                            .map((vehicle) => (
+                          vehicles.slice(0, 2).map((vehicle) => {
+                            const nextLog = logs.find(
+                              (l) => l.vehicle_id === vehicle.id
+                            );
+                            const nextService = nextLog
+                              ? nextLog.items.map((i) => i.type).join(', ')
+                              : 'No recent logs';
+                            return (
                               <VehicleCard
                                 key={vehicle.id}
                                 id={vehicle.id}
@@ -605,11 +438,7 @@ const Dashboard = () => {
                                 year={vehicle.year}
                                 image={vehicle.image}
                                 mileage={vehicle.mileage || 0}
-                                nextService={
-                                  upcomingMaintenance.find(
-                                    (m) => m.vehicle_id === vehicle.id
-                                  )?.description || 'No upcoming services'
-                                }
+                                nextService={nextService}
                                 healthScore={
                                   Math.floor(Math.random() * 30) + 70
                                 }
@@ -617,11 +446,13 @@ const Dashboard = () => {
                                 onDelete={handleDeleteVehicle}
                                 onEdit={handleEditVehicle}
                               />
-                            ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
 
+                    {/* Maintenance summary */}
                     <div>
                       <div className='flex items-center justify-between mb-4'>
                         <h2 className='text-xl font-semibold'>
@@ -651,7 +482,7 @@ const Dashboard = () => {
                                     Completed
                                   </p>
                                   <h3 className='text-2xl font-bold'>
-                                    {completedMaintenance.length}
+                                    {completedCount}
                                   </h3>
                                 </div>
                               </div>
@@ -694,6 +525,7 @@ const Dashboard = () => {
                     </div>
                   </div>
 
+                  {/* Upcoming services */}
                   <div>
                     <div className='flex items-center justify-between mb-4'>
                       <div>
@@ -728,7 +560,30 @@ const Dashboard = () => {
                     </div>
 
                     <div className='space-y-4'>
-                      {upcomingMaintenance.length === 0 ? (
+                      {logs
+                        .filter((l) => {
+                          const s = aggregateStatus(l.items);
+                          return s === 'upcoming' || s === 'overdue';
+                        })
+                        .slice(0, 3)
+                        .map((log) => {
+                          const card = toMaintenanceItemProps(log);
+                          return (
+                            <MaintenanceItem
+                              key={log.id}
+                              id={card.id}
+                              title={card.title}
+                              description={card.description}
+                              date={card.date}
+                              status={card.status}
+                              mileage={card.mileage}
+                              cost={card.cost}
+                              onView={handleViewMaintenance}
+                            />
+                          );
+                        })}
+
+                      {logs.length === 0 && (
                         <Card className='bg-dark-card border-white/10 border-dashed'>
                           <CardContent className='p-6 text-center'>
                             <Wrench className='w-8 h-8 text-foreground/20 mx-auto mb-3' />
@@ -736,7 +591,7 @@ const Dashboard = () => {
                               No Services Scheduled
                             </h3>
                             <p className='text-sm text-foreground/70 mb-4'>
-                              Add maintenance records to track your vehicle's
+                              Add maintenance logs to track your vehicle&apos;s
                               service history.
                             </p>
                             <Button
@@ -762,37 +617,20 @@ const Dashboard = () => {
                             </Button>
                           </CardContent>
                         </Card>
-                      ) : (
-                        upcomingMaintenance
-                          .slice(0, 3)
-                          .map((task) => (
-                            <MaintenanceItem
-                              key={task.id}
-                              id={task.id}
-                              title={task.type}
-                              description={task.description}
-                              date={task.date}
-                              status={task.status}
-                              mileage={task.mileage || undefined}
-                              cost={task.cost || undefined}
-                              onView={handleViewMaintenance}
-                              onComplete={handleCompleteMaintenance}
-                            />
-                          ))
                       )}
                     </div>
                   </div>
                 </div>
               </TabsContent>
 
+              {/* Vehicles */}
               <TabsContent value='vehicles' className='mt-0 animate-fade-in'>
                 <div className='mb-6'>
                   <div className='flex items-center justify-between mb-6'>
                     <div>
                       <h2 className='text-xl font-semibold'>Your Vehicles</h2>
                       <p className='text-foreground/60'>
-                        Manage your vehicle fleet and track maintenance for each
-                        one
+                        Manage your vehicles and track maintenance
                       </p>
                     </div>
                     <Button
@@ -807,16 +645,15 @@ const Dashboard = () => {
                   </div>
 
                   <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-                    {displayVehicles.length === 0 && !isDemoMode ? (
+                    {vehicles.length === 0 ? (
                       <div className='col-span-full text-center py-12'>
                         <Car className='w-16 h-16 text-foreground/20 mx-auto mb-4' />
                         <h3 className='text-xl font-medium mb-2'>
                           No Vehicles Found
                         </h3>
                         <p className='text-foreground/70 mb-6 max-w-md mx-auto'>
-                          Add your first vehicle to start tracking maintenance,
-                          get service reminders, and access AI-powered insights
-                          about your vehicle's health.
+                          Add your first vehicle to start tracking maintenance
+                          and get reminders.
                         </p>
                         <Button
                           className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
@@ -827,8 +664,14 @@ const Dashboard = () => {
                         </Button>
                       </div>
                     ) : (
-                      <>
-                        {displayVehicles.map((vehicle) => (
+                      vehicles.map((vehicle) => {
+                        const nextLog = logs.find(
+                          (l) => l.vehicle_id === vehicle.id
+                        );
+                        const nextService = nextLog
+                          ? nextLog.items.map((i) => i.type).join(', ')
+                          : 'No recent logs';
+                        return (
                           <VehicleCard
                             key={vehicle.id}
                             id={vehicle.id}
@@ -837,47 +680,26 @@ const Dashboard = () => {
                             year={vehicle.year}
                             image={vehicle.image}
                             mileage={vehicle.mileage || 0}
-                            nextService={
-                              upcomingMaintenance.find(
-                                (m) => m.vehicle_id === vehicle.id
-                              )?.description || 'No upcoming services'
-                            }
+                            nextService={nextService}
                             healthScore={Math.floor(Math.random() * 30) + 70}
                             alerts={overdueCount}
                             onDelete={handleDeleteVehicle}
                             onEdit={handleEditVehicle}
                           />
-                        ))}
-
-                        {!isDemoMode && (
-                          <div
-                            className='glass-card rounded-xl flex flex-col items-center justify-center p-8 border border-dashed border-white/20 hover:border-neon-blue/50 transition-colors cursor-pointer min-h-[300px]'
-                            onClick={handleAddVehicle}
-                          >
-                            <div className='w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4'>
-                              <Plus className='w-8 h-8 text-neon-blue' />
-                            </div>
-                            <h3 className='text-lg font-medium mb-2'>
-                              Add New Vehicle
-                            </h3>
-                            <p className='text-foreground/70 text-center'>
-                              Track maintenance and get personalized service
-                              reminders for another vehicle
-                            </p>
-                          </div>
-                        )}
-                      </>
+                        );
+                      })
                     )}
                   </div>
                 </div>
               </TabsContent>
 
+              {/* Maintenance (full list) */}
               <TabsContent value='maintenance' className='mt-0 animate-fade-in'>
                 <div className='mb-6'>
                   <div className='flex items-center justify-between mb-6'>
                     <div>
                       <h2 className='text-xl font-semibold'>
-                        Maintenance Schedule
+                        Maintenance Logs
                       </h2>
                       <p className='text-foreground/60'>
                         Track completed services and schedule upcoming
@@ -907,16 +729,16 @@ const Dashboard = () => {
                     </Button>
                   </div>
 
-                  {displayMaintenance.length === 0 && !isDemoMode ? (
+                  {logs.length === 0 ? (
                     <div className='text-center py-12'>
                       <Wrench className='w-16 h-16 text-foreground/20 mx-auto mb-4' />
                       <h3 className='text-xl font-medium mb-2'>
-                        No Maintenance Records
+                        No Maintenance Logs
                       </h3>
                       <p className='text-foreground/70 mb-6 max-w-md mx-auto'>
-                        Start tracking your vehicle's maintenance history. Add
-                        both completed services and schedule upcoming
-                        maintenance to stay on top of your vehicle's needs.
+                        Start tracking your vehicle&apos;s maintenance history.
+                        Add both completed services and schedule upcoming
+                        maintenance.
                       </p>
                       <Button
                         className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
@@ -928,25 +750,28 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div className='space-y-4'>
-                      {displayMaintenance.map((task) => (
-                        <MaintenanceItem
-                          key={task.id}
-                          id={task.id}
-                          title={task.type}
-                          description={task.description}
-                          date={task.date}
-                          status={task.status}
-                          mileage={task.mileage || undefined}
-                          cost={task.cost || undefined}
-                          onView={handleViewMaintenance}
-                          onComplete={handleCompleteMaintenance}
-                        />
-                      ))}
+                      {logs.map((log) => {
+                        const card = toMaintenanceItemProps(log);
+                        return (
+                          <MaintenanceItem
+                            key={log.id}
+                            id={card.id}
+                            title={card.title}
+                            description={card.description}
+                            date={card.date}
+                            status={card.status}
+                            mileage={card.mileage}
+                            cost={card.cost}
+                            onView={handleViewMaintenance}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               </TabsContent>
 
+              {/* Predictions */}
               <TabsContent value='predictions' className='mt-0 animate-fade-in'>
                 <FeatureGate
                   enabled={isPro}
@@ -999,89 +824,12 @@ const Dashboard = () => {
                         </span>
                       </Button>
                     </div>
-
-                    {isDemoMode ? (
-                      // ——— keep your existing demo content here (unchanged) ———
-                      <div className='space-y-4'>
-                        {/* ... demo cards ... */}
-                      </div>
-                    ) : !predictionsLoading &&
-                      predictions.length === 0 &&
-                      maintenanceRecords.length < 2 ? (
-                      <Card className='bg-dark-card border-white/10'>
-                        <CardContent className='p-6 text-center'>
-                          <Brain className='w-16 h-16 mx-auto text-foreground/20 mb-4' />
-                          <h3 className='text-xl font-medium mb-2'>
-                            Not Enough Data
-                          </h3>
-                          <p className='text-foreground/70 max-w-md mx-auto mb-6'>
-                            Add at least 2 maintenance records of the same type
-                            for a vehicle to enable AI predictions. More history
-                            means more accurate predictions!
-                          </p>
-                          <Button
-                            className='bg-neon-blue hover:bg-neon-blue/90 text-black font-medium'
-                            onClick={handleAddMaintenance}
-                          >
-                            Add Maintenance Records
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <div className='space-y-6'>
-                        <Card className='bg-dark-card border-white/10 p-4'>
-                          <div className='flex justify-between items-start mb-4'>
-                            <div>
-                              <h3 className='text-lg font-medium'>
-                                How It Works
-                              </h3>
-                              <p className='text-foreground/70'>
-                                The AI analyzes your vehicle maintenance history
-                                to predict future service needs
-                              </p>
-                            </div>
-                            <div className='bg-neon-blue/10 p-2 rounded-lg'>
-                              <Brain className='h-5 w-5 text-neon-blue' />
-                            </div>
-                          </div>
-
-                          <div className='grid md:grid-cols-3 gap-4 mt-4'>
-                            <div className='p-3 bg-white/5 rounded-lg'>
-                              <h4 className='font-medium mb-2'>
-                                1. Data Collection
-                              </h4>
-                              <p className='text-sm text-foreground/70'>
-                                Records your maintenance history and vehicle
-                                details
-                              </p>
-                            </div>
-                            <div className='p-3 bg-white/5 rounded-lg'>
-                              <h4 className='font-medium mb-2'>
-                                2. Pattern Analysis
-                              </h4>
-                              <p className='text-sm text-foreground/70'>
-                                Identifies intervals between similar maintenance
-                                tasks
-                              </p>
-                            </div>
-                            <div className='p-3 bg-white/5 rounded-lg'>
-                              <h4 className='font-medium mb-2'>
-                                3. Smart Predictions
-                              </h4>
-                              <p className='text-sm text-foreground/70'>
-                                Uses your patterns and industry standards to
-                                predict future needs
-                              </p>
-                            </div>
-                          </div>
-                        </Card>
-                        <MaintenancePredictions showAll />
-                      </div>
-                    )}
+                    <MaintenancePredictions showAll />
                   </div>
                 </FeatureGate>
               </TabsContent>
 
+              {/* AI Assistant */}
               <TabsContent
                 value='ai-assistant'
                 className='mt-0 animate-fade-in'
@@ -1162,15 +910,12 @@ const Dashboard = () => {
                 <EditVehicleForm
                   vehicle={selectedVehicle}
                   onSubmit={async (data) => {
-                    const success = await updateVehicle(
-                      selectedVehicle.id,
-                      data
-                    );
-                    if (success) {
+                    const ok = await updateVehicle(selectedVehicle.id, data);
+                    if (ok) {
                       setIsEditVehicleOpen(false);
                       setSelectedVehicle(null);
                     }
-                    return success;
+                    return ok;
                   }}
                   onCancel={() => {
                     setIsEditVehicleOpen(false);
@@ -1183,7 +928,7 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Add Maintenance */}
+      {/* Add Maintenance (uses new AddMaintenanceForm API with onCreated) */}
       <Dialog
         open={isAddMaintenanceOpen}
         onOpenChange={setIsAddMaintenanceOpen}
@@ -1191,7 +936,7 @@ const Dashboard = () => {
         <DialogContent className='w-[95vw] sm:max-w-[560px] p-0 overflow-hidden bg-dark-card border-white/10 text-foreground'>
           <div className='flex max-h-[calc(100vh-4rem)] flex-col'>
             <DialogHeader className='shrink-0 p-6 pb-3'>
-              <DialogTitle>Add Maintenance Record</DialogTitle>
+              <DialogTitle>Add Maintenance Log</DialogTitle>
               <DialogDescription>
                 Enter maintenance details below.
               </DialogDescription>
@@ -1200,26 +945,24 @@ const Dashboard = () => {
             <div className='flex-1 min-h-0 p-6 pt-3'>
               <AddMaintenanceForm
                 vehicles={vehicles}
-                onSubmit={async (data) => {
-                  const success = await addMaintenanceRecord(data);
-                  if (success) setIsAddMaintenanceOpen(false);
-                }}
                 onCancel={() => setIsAddMaintenanceOpen(false)}
+                onCreated={() => {
+                  setIsAddMaintenanceOpen(false);
+                  fetchLogs();
+                }}
               />
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Health modal (unchanged) */}
+      {/* Keep health modal scaffold (hook up open/state when you re-enable this feature) */}
       <VehicleHealthModal
-        isOpen={isHealthModalOpen}
-        onClose={() => setIsHealthModalOpen(false)}
-        vehicle={selectedHealthVehicle || undefined}
-        maintenanceRecords={maintenanceRecords}
+        isOpen={false}
+        onClose={() => void 0}
+        vehicle={undefined}
+        maintenanceRecords={[]}
       />
     </div>
   );
-};
-
-export default Dashboard;
+}
