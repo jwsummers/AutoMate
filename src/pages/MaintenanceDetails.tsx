@@ -35,6 +35,7 @@ import {
   Clock,
   Edit,
   Trash,
+  Calendar,
 } from 'lucide-react';
 import EditMaintenanceLogForm from '@/components/dashboard/EditMaintenanceLogForm';
 
@@ -432,6 +433,18 @@ export default function MaintenanceDetails() {
                       <Link to={`/dashboard?addMaintenance=${log.vehicle_id}`}>
                         <Wrench className='h-4 w-4' />
                         <span>Add New Maintenance</span>
+                      </Link>
+                    </Button>
+
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='w-full justify-start gap-2 border-white/10 hover:bg-white/5'
+                      asChild
+                    >
+                      <Link to={`/vehicles/${log.vehicle_id}/report`}>
+                        <Calendar className='h-4 w-4' />
+                        <span>Vehicle Report (Print/PDF)</span>
                       </Link>
                     </Button>
 

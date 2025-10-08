@@ -137,3 +137,11 @@
 .tilt-card:hover {
   transform: rotateX(5deg) rotateY(5deg) scale(1.02);
 }
+
+@media print {
+  .no-print { display: none !important; }
+  @page { size: Letter; margin: 0.5in; }
+  /* avoid breaking log cards mid-article */
+  article { break-inside: avoid; page-break-inside: avoid; }
+}
+
